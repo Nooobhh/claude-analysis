@@ -1,6 +1,7 @@
 // IP 属性查询：ipapi.is 与 proxycheck.io 并行查、合并结果（保留各家结论，分歧由前端并排显示）；
 // 两家都失败时 ipinfo 兜底（只有基础属性）。同时查 RDAP 拿 IP 段登记国家，用于判断原生 IP
 import type { IpInfo, IpRegistration, IpRisk, IpSource, RiskFlag } from '@claude-analysis/shared';
+import { connect } from 'cloudflare:sockets';
 
 export interface Secrets {
   /** 缓存 / 限频 key 的哈希盐；未配置时不缓存 */
@@ -277,22 +278,38 @@ function codeOfCountryName(name: string): string | null {
   return countryCodeByName.get(name.trim().toLowerCase()) ?? null;
 }
 
-/**
- * RDAP 入口：任一注册机构都会把不归自己管的地址重定向到正确的机构。
- * Workers 访问 ARIN 常见成串的 525（2026-10-01 实测三到五成），所以先走 RIPE，
- * 只有 ARIN 自己的地址才落到 ARIN；失败时两个入口交替重试并逐次加大间隔
- */
-const RDAP_ENTRIES = ['https://rdap.db.ripe.net/ip/', 'https://rdap.arin.net/registry/ip/'];
-const RDAP_ATTEMPTS = 4;
+/** whois 43 端口查 ARIN：多段时按「上级 → 最具体」排列，取最后一段的 Country / NetName */
+async function fromArinWhois(ip: string): Promise<IpRegistration | null> {
+  const socket = connect({ hostname: 'whois.arin.net', port: 43 });
+  const query = (async () => {
+    const writer = socket.writable.getWriter();
+    await writer.write(new TextEncoder().encode(`n + ${ip}\r\n`));
+    const text = await new Response(socket.readable).text();
+    const last = (key: string) => [...text.matchAll(new RegExp(`^${key}:\\s*(.+)$`, 'gm'))].at(-1)?.[1].trim() ?? null;
+    const country = last('Country');
+    return country ? { country: country.toUpperCase(), rir: 'ARIN', netname: last('NetName') } : null;
+  })();
+  const timeout = new Promise<null>((r) => setTimeout(() => r(null), UPSTREAM_TIMEOUT_MS));
+  try {
+    return await Promise.race([query.catch(() => null), timeout]);
+  } finally {
+    socket.close().catch(() => {});
+  }
+}
 
+/**
+ * 查 IP 段登记信息。先走 RIPE 的 RDAP 入口：各 RIR 会把不归自己管的地址重定向到正确的机构。
+ * ARIN 的 RDAP 挂在 Cloudflare 后面，Workers 访问常成串返回 525（2026-10-01 实测），
+ * 重定向落到 ARIN 失败时改查 ARIN 的 whois 43 端口（实测稳定）
+ */
 async function fromRdap(ip: string): Promise<IpRegistration | null> {
   let res: Response | null = null;
-  for (let i = 0; i < RDAP_ATTEMPTS && !res?.ok; i++) {
-    if (i) await new Promise((r) => setTimeout(r, 300 * i));
-    res = await fetch(`${RDAP_ENTRIES[i % RDAP_ENTRIES.length]}${encodeURIComponent(ip)}`, {
+  for (let i = 0; i < 2 && !res?.ok; i++) {
+    res = await fetch(`https://rdap.db.ripe.net/ip/${encodeURIComponent(ip)}`, {
       headers: { accept: 'application/rdap+json' },
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     }).catch(() => null);
+    if (res && !res.ok && new URL(res.url).hostname.includes('arin')) return fromArinWhois(ip);
   }
   if (!res?.ok) return null;
   const d = await res.json<RdapNetwork>();

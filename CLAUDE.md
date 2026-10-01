@@ -40,7 +40,7 @@
 - 数据站（后续）：tokyo 服务器，Caddy 反代；接收检测站签名 token，不接收原始 IP
 - 浏览器直连：Anthropic 8 域名 trace、ipip.net / 又拍云（国内 IP）、Cloudflare / Google STUN、Fastly / Surfshark / ipleak（DNS）
 - Worker 访问：proxycheck.io + ipapi.is 并行（记 `flaggedBy` / `typeBy`，分歧前端并排显示），ipinfo.io 兜底；status.claude.com
-- 原生 IP：Worker 查 RDAP（先 RIPE 后 ARIN，各 RIR 互相跳转；ARIN 对 Workers 常 525），ARIN 取注册人地址末行
+- 原生 IP：Worker 从 RIPE 的 RDAP 入口查（各 RIR 互相跳转）；落到 ARIN 时常 525，改走 whois.arin.net:43
 - Workers 出口 IP 多人共享，第三方匿名额度在线上基本不可用（2026-09-30 实测 proxycheck 403、ipinfo 429），一律配 key
 - 增删任何第三方必须同步 `src/pages/privacy.astro` 的清单
 

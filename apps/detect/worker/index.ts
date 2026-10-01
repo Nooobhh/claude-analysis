@@ -7,7 +7,7 @@ const IP_CACHE_TTL = 86400;
 // RDAP 偶发失败时缩短缓存，避免「原生 IP」一整天查不到
 const IP_CACHE_TTL_PARTIAL = 3600;
 // 数据源或返回结构变化时递增，旧缓存自然过期
-const IP_CACHE_VERSION = 6;
+const IP_CACHE_VERSION = 7;
 
 function reply(body: unknown, status = 200, cacheControl = 'no-store'): Response {
   return Response.json(body, { status, headers: { 'cache-control': cacheControl } });
