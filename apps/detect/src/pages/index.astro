@@ -1,0 +1,113 @@
+---
+import { STATUS_LABEL } from '@claude-analysis/shared';
+import Base from '../layouts/Base.astro';
+import { CARDS, CHECKS, IP_CARDS } from '../lib/catalog';
+
+const STATS = ['bad', 'warn', 'ok', 'unknown'] as const;
+---
+
+<Base
+  title="Claude 使用环境检测 · claude-analysis"
+  description="检测访问 Claude 时的出口 IP、IP 风险、环境指纹与 WebRTC / DNS 泄露。开源、本地检测、不存数据。"
+  current="home"
+>
+  <button slot="header-actions" class="switch" id="toggle-ip" type="button" role="switch" aria-checked="false">
+    <span class="switch__track" aria-hidden="true"></span>显示 IP
+  </button>
+
+  <section class="hero">
+    <h1>Claude 使用环境检测</h1>
+    <p>检查你访问 Claude 时的出口 IP、IP 风险、环境指纹和泄露情况。检测在浏览器里完成，国内 IP 不会离开你的设备。</p>
+  </section>
+
+  <div class="card summary">
+    <div class="summary__progress" id="progress"></div>
+    <div class="stats">
+      {
+        STATS.map((s) => (
+          <div class="stat" data-status={s} data-zero="true" hidden={s === 'unknown'}>
+            <span class="stat__num" data-count={s}>
+              0
+            </span>
+            <span class="stat__label">{STATUS_LABEL[s]}</span>
+          </div>
+        ))
+      }
+    </div>
+    <div class="summary__side">
+      <span class="summary__label" id="progress-label">检测中 0/{CHECKS.length}</span>
+      <div class="summary__actions">
+        <button class="btn" id="rerun" type="button">重新检测</button>
+        <button class="btn btn--primary" id="copy" type="button">复制报告</button>
+      </div>
+    </div>
+    <p class="sr-only" id="announce" aria-live="polite"></p>
+  </div>
+
+  <div class="grid grid--ips">
+    {
+      IP_CARDS.map((c) => (
+        <section class="card ipcard" data-check={c.id} aria-label={c.label}>
+          <div class="ipcard__head">
+            <div>
+              <h2 class="card__title">{c.label}</h2>
+              {c.hint && <p class="card__desc">{c.hint}</p>}
+            </div>
+            <span class="tag" data-status="pending">
+              检测中
+            </span>
+          </div>
+          <div class="check__value ipcard__value">
+            <span class="skeleton" />
+          </div>
+          <p class="check__reason" hidden />
+        </section>
+      ))
+    }
+  </div>
+
+  <div class="grid">
+    {
+      CARDS.map((card) => (
+        <section class:list={['card', 'panel', { 'panel--wide': card.wide }]} aria-labelledby={`card-${card.id}`}>
+          <h2 class="card__title" id={`card-${card.id}`}>
+            {card.title}
+          </h2>
+          {card.desc && <p class="card__desc">{card.desc}</p>}
+          <div class="panel__rows">
+            {card.checks.map((check) => (
+              <div class="check" data-check={check.id}>
+                <div class="check__main">
+                  <div class="check__label">
+                    <span class="check__name">{check.label}</span>
+                    {check.hint && <span class="check__hint">{check.hint}</span>}
+                  </div>
+                  <div class="check__right">
+                    <span class="check__value">
+                      <span class="skeleton" />
+                    </span>
+                    <span class="tag" data-status="pending">
+                      检测中
+                    </span>
+                  </div>
+                </div>
+                <p class="check__reason" hidden />
+                <div class="check__rows" hidden />
+                <details class="details" hidden>
+                  <summary />
+                  <dl />
+                </details>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+</Base>
+
+<script>
+  import '../scripts/detect';
+</script>

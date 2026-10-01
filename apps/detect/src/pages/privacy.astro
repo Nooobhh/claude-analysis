@@ -1,0 +1,94 @@
+---
+import Base from '../layouts/Base.astro';
+import { ANTHROPIC_DOMAINS } from '../lib/catalog';
+---
+
+<Base title="隐私说明 · claude-analysis" description="检测站收集什么、不收集什么，以及浏览器会访问哪些第三方服务。" current="privacy">
+  <section class="hero">
+    <h1>隐私说明</h1>
+    <p>检测站不存任何数据。大部分检测在你的浏览器里完成；需要服务器参与的部分，下面逐条写明。</p>
+  </section>
+
+  <article class="prose">
+    <h2>只留在你浏览器里的</h2>
+    <ul>
+      <li><strong>国内出口 IP</strong>（你的宽带 IP）：只在本页显示，不会发给本站服务器，复制报告也不包含它。</li>
+      <li><strong>环境指纹</strong>：时区、语言、区域格式、字体、浏览器与设备信息，全部在本地计算。</li>
+      <li><strong>WebRTC 与 DNS 检测结果</strong>：只在本地比对和显示。WebRTC 拿到的 IP 是否在中国大陆，用本站自带的 APNIC 分配表在浏览器里判断，不查询任何服务器。</li>
+      <li>页面不使用 Cookie，也不往 localStorage 写任何东西；「显示 IP」开关刷新即恢复。</li>
+    </ul>
+
+    <h2>发送到本站服务器的</h2>
+    <p>本站托管在 Cloudflare Workers，只有两个接口：</p>
+    <ul>
+      <li>
+        <code>/api/ip</code>：发送 <strong>claude.ai 的出口 IP</strong>（放在请求体里，不进 URL），用于查询 IP 归属与风险标记。
+        查询结果以「加盐哈希」为 key 缓存 24 小时，不保存 IP 原文；限频同样按请求者 IP 的加盐哈希计数。
+      </li>
+      <li><code>/api/status</code>：转发 Claude 官方状态页，不含任何个人数据。</li>
+    </ul>
+    <p>Worker 关闭了日志与可观测性功能，不记录访问日志。Cloudflare 作为托管平台会处理这些请求，受其自身隐私政策约束。</p>
+
+    <h2>浏览器会直接访问的第三方</h2>
+    <p>检测需要浏览器直接请求以下服务，它们会看到对应的 IP：</p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>服务</th><th>用途</th><th>对方能看到</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{ANTHROPIC_DOMAINS.join('、')} 的 <code>/cdn-cgi/trace</code></td>
+            <td>读取出口 IP、延迟</td>
+            <td>你访问 Claude 时的出口 IP（平时使用 Claude 本来就会看到）</td>
+          </tr>
+          <tr>
+            <td>myip.ipip.net、pubstatic.b0.upaiyun.com（又拍云）</td>
+            <td>读取国内出口 IP</td>
+            <td>你的国内宽带 IP</td>
+          </tr>
+          <tr>
+            <td>stun.cloudflare.com、stun.l.google.com</td>
+            <td>WebRTC UDP 出口检测</td>
+            <td>你的 UDP 出口 IP</td>
+          </tr>
+          <tr>
+            <td>*.u.fastly-analytics.com、*.ipv4.surfsharkdns.com、*.ipleak.net</td>
+            <td>DNS 解析器检测（按顺序尝试，拿到结果即停）</td>
+            <td>你使用的 DNS 解析器 IP、访问它们时的出口 IP</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>本站服务器会访问的第三方</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>服务</th><th>用途</th><th>对方能看到</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>proxycheck.io 与 ipapi.is（并行查询、合并结果）、ipinfo.io（两家都失败时兜底）</td>
+            <td>查询 IP 归属与风险标记</td>
+            <td>你的 claude.ai 出口 IP（24 小时内同一 IP 只查一次）</td>
+          </tr>
+          <tr>
+            <td>status.claude.com</td>
+            <td>Claude 服务状态</td>
+            <td>无个人数据</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2>没有的东西</h2>
+    <ul>
+      <li>没有统计、广告、追踪像素，也不从任何 CDN 加载脚本、字体或国旗图标，它们都随本站一起发布。</li>
+      <li>没有账号、没有表单，检测站不写数据库。</li>
+    </ul>
+
+    <h2>开源</h2>
+    <p>全部代码以 AGPL-3.0 协议开源，上面每一条都可以在源码里核对。</p>
+  </article>
+</Base>

@@ -1,0 +1,18 @@
+{
+  "name": "claude-analysis",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "packageManager": "pnpm@10.34.3",
+  "scripts": {
+    "dev": "pnpm --filter @claude-analysis/detect dev",
+    "dev:worker": "pnpm --filter @claude-analysis/detect dev:worker",
+    "build": "pnpm --filter @claude-analysis/detect build",
+    "typecheck": "pnpm -r typecheck",
+    "deploy": "pnpm --filter @claude-analysis/detect run deploy"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}

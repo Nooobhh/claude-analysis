@@ -1,0 +1,56 @@
+---
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  current?: 'home' | 'privacy';
+}
+
+const { title, description, current } = Astro.props;
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a class="brand" href="/" aria-label="claude-analysis 首页">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <rect x="0.5" y="0.5" width="19" height="19" rx="5" stroke="currentColor"></rect>
+            <circle cx="10" cy="10" r="3" fill="currentColor"></circle>
+          </svg>
+          claude-analysis
+        </a>
+        <nav class="nav">
+          <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>隐私</a>
+          <slot name="header-actions" />
+        </nav>
+      </div>
+    </header>
+
+    <main class="container">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <span>开源 · AGPL-3.0</span>
+        <a href="/privacy">隐私说明</a>
+        <span>检测思路参考 <a href="https://github.com/LinXiaoTao/FuckClaude" rel="noopener">FuckClaude</a> 与 <a href="https://github.com/jason5ng32/MyIP" rel="noopener">MyIP</a></span>
+      </div>
+    </footer>
+  </body>
+</html>

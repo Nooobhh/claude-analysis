@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "detect",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev"],
+      "port": 4321
+    },
+    {
+      "name": "detect-worker",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:worker"],
+      "port": 8787
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@claude-analysis/detect",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "dev:worker": "astro build && wrangler dev",
+    "build": "astro build",
+    "typecheck": "wrangler types && tsc --noEmit -p worker && tsc --noEmit",
+    "cf-typegen": "wrangler types",
+    "deploy": "astro build && wrangler deploy",
+    "gen:cn-ipv4": "node scripts/gen-cn-ipv4.mjs"
+  },
+  "dependencies": {
+    "@claude-analysis/shared": "workspace:*",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
+    "astro": "^7.3.5",
+    "flag-icons": "^7.5.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.144.0"
+  }
+}
