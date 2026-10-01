@@ -6,7 +6,7 @@
 
 - [x] 页脚显示版本与 commit，链接到 GitHub 对应提交（本地带未提交改动构建时标注）
 - [x] `.github/workflows/deploy.yml`：push main 自动类型检查 + 部署
-- [ ] 配置仓库 Secret `CLOUDFLARE_API_TOKEN`（`CLOUDFLARE_ACCOUNT_ID` 已配），跑通首次自动部署
+- [x] 配置仓库 Secret `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，首次自动部署已跑通
 
 ## Backlog
 - P1 数据站首版：问卷 + 检测结果签名 token 一键带入 + 匿名管理链接（可更新 / 删除）
