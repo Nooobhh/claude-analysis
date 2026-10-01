@@ -2,11 +2,7 @@
 > 项目 overview（现在 + 未来）。已发布历史看 CHANGELOG.md，agent 指令看 CLAUDE.md。
 
 ## 当前主线
-0.3.0 — 部署可核对：GitHub Actions 自动部署 + 页脚显示线上 commit
-
-- [x] 页脚显示版本与 commit，链接到 GitHub 对应提交（本地带未提交改动构建时标注）
-- [x] `.github/workflows/deploy.yml`：push main 自动类型检查 + 部署
-- [x] 配置仓库 Secret `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID`，首次自动部署已跑通
+0.4.0 — 待定（从 Backlog 置顶项选定后填写）
 
 ## Backlog
 - P1 数据站首版：问卷 + 检测结果签名 token 一键带入 + 匿名管理链接（可更新 / 删除）
