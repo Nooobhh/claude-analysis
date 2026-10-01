@@ -277,13 +277,21 @@ function codeOfCountryName(name: string): string | null {
   return countryCodeByName.get(name.trim().toLowerCase()) ?? null;
 }
 
-/** 从 ARIN 入口查 RDAP：非 ARIN 地址会被重定向到 RIPE / APNIC / LACNIC / AFRINIC */
+const RDAP_ATTEMPTS = 3;
+
+/**
+ * 从 ARIN 入口查 RDAP：非 ARIN 地址会被重定向到 RIPE / APNIC / LACNIC / AFRINIC。
+ * Workers 访问 ARIN 偶发 525（2026-10-01 实测约两三成），失败重试
+ */
 async function fromRdap(ip: string): Promise<IpRegistration | null> {
-  const res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
-    headers: { accept: 'application/rdap+json' },
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-  });
-  if (!res.ok) return null;
+  let res: Response | null = null;
+  for (let i = 0; i < RDAP_ATTEMPTS && !res?.ok; i++) {
+    res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
+      headers: { accept: 'application/rdap+json' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+    }).catch(() => null);
+  }
+  if (!res?.ok) return null;
   const d = await res.json<RdapNetwork>();
   const host = new URL(res.url).hostname;
   // RIPE / APNIC / LACNIC 在网段上直接给国家；ARIN 不给，取注册人地址的最后一行

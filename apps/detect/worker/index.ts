@@ -4,8 +4,10 @@ import type { IpApiResponse, ServiceStatus, StatusApiResponse } from '@claude-an
 import { hashIp, isPublicIp, lookupIp, type Secrets } from './ip';
 
 const IP_CACHE_TTL = 86400;
+// RDAP 偶发失败时缩短缓存，避免「原生 IP」一整天查不到
+const IP_CACHE_TTL_PARTIAL = 3600;
 // 数据源或返回结构变化时递增，旧缓存自然过期
-const IP_CACHE_VERSION = 4;
+const IP_CACHE_VERSION = 5;
 
 function reply(body: unknown, status = 200, cacheControl = 'no-store'): Response {
   return Response.json(body, { status, headers: { 'cache-control': cacheControl } });
@@ -32,7 +34,8 @@ async function handleIp(req: Request, env: Env & Secrets): Promise<Response> {
   const data = await lookupIp(ip, env);
   if (!data) return reply({ ok: false, error: 'upstream' } satisfies IpApiResponse, 502);
   // KV 免费额度写满时 put 会失败，不影响本次返回
-  if (cacheKey) await env.IP_CACHE.put(cacheKey, JSON.stringify(data), { expirationTtl: IP_CACHE_TTL }).catch(() => {});
+  const ttl = data.registration ? IP_CACHE_TTL : IP_CACHE_TTL_PARTIAL;
+  if (cacheKey) await env.IP_CACHE.put(cacheKey, JSON.stringify(data), { expirationTtl: ttl }).catch(() => {});
   return reply({ ok: true, data } satisfies IpApiResponse);
 }
 
