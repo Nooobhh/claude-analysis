@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // 问卷站：claudeban.ohaze.workers.dev；目前只有静态页，没有 Worker 代码
+  "name": "claudeban",
+  // 与检测站一致：本地 workerd 支持到 2026-09-26，不能晚于它
+  "compatibility_date": "2026-09-26",
+  "assets": { "directory": "./dist" },
+  // 隐私：不开日志 / 追踪
+  "observability": { "enabled": false }
+}

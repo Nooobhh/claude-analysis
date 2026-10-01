@@ -1,4 +1,4 @@
-# 推送到 main 后自动构建并部署检测站到 Cloudflare Workers。
+# 推送到 main 后自动构建并部署检测站与问卷站（claudeban）到 Cloudflare Workers。
 # 页脚显示的 commit 就是本次部署的提交，用来核对线上运行的是仓库里的代码。
 # 需要仓库 Secret CLOUDFLARE_API_TOKEN（Cloudflare「Edit Cloudflare Workers」模板）与 CLOUDFLARE_ACCOUNT_ID；
 # Worker 的运行时 secret（IP_HASH_SALT 等）已存在 Cloudflare 上，部署不会覆盖。
@@ -41,6 +41,11 @@ jobs:
       - name: Deploy
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: pnpm run deploy
+
+      # 问卷站单独一步、排在检测站之后：问卷站部署失败不影响检测站
+      - name: Deploy survey site
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: pnpm run deploy:data
 
       - name: Skip deploy (missing CLOUDFLARE_API_TOKEN)
         if: env.CLOUDFLARE_API_TOKEN == ''

@@ -1,0 +1,68 @@
+---
+// 问卷站隐私说明：这里的每一条都是对实现的约束（见 CLAUDE.md 编码约束），改收集字段或第三方要同步本页
+import Base from '../layouts/Base.astro';
+import { DETECT_URL } from '../lib/sites';
+---
+
+<Base title="问卷隐私说明 · claude-analysis" description="问卷站收集什么、不收集什么：不读取、不保存 IP，不收集邮箱和账号。" current="privacy">
+  <section class="hero">
+    <h1>隐私说明</h1>
+    <p>问卷匿名填写。问卷站不读取、也不保存你的 IP，不收集邮箱和账号。下面逐条写明收集什么、不收集什么。</p>
+  </section>
+
+  <article class="prose">
+    <h2>不收集的</h2>
+    <ul>
+      <li><strong>任何 IP</strong>：问卷站的代码不读取请求的 IP（包括 Cloudflare 附带的 IP 请求头），不写进数据库，也不记访问日志。</li>
+      <li><strong>邮箱、Claude 账号、手机号、完整卡号</strong>：问卷只问类型（如「Gmail」「虚拟卡」），不问具体是哪一个。</li>
+      <li>页面不使用 Cookie，也不往浏览器存储里写任何东西；关掉页面，没提交的答案就没了。</li>
+    </ul>
+
+    <h2>收集的</h2>
+    <ul>
+      <li><strong>你选的答案</strong>：问卷里的每一题，不显示的题不提交。</li>
+      <li>
+        <strong>检测站结果码里的检测结论</strong>（选了「用检测站自动获取」才有）：Claude 出口所在国家、ASN 与运营商名、网络类型、VPN /
+        代理 / Tor / 滥用 / 机房标记与风险分、IP 段登记国家、各检测项的判定结果、系统时区、浏览器语言、区域格式、是否有中文字体、国产浏览器 /
+        设备名、系统与浏览器类型、WebRTC 是否泄露、DNS 解析器所在国家，以及检测时间和检测站版本。<strong>结果码不含任何 IP，也不含城市。</strong>
+      </li>
+      <li><strong>选填的文字</strong>：邮箱后缀、卡号前 6 位、发卡地区、Google Play 的其他付款方式、补充说明。卡号前 6 位只能看出发卡行和卡种，看不出是谁的卡。</li>
+      <li><strong>提交和修改的日期</strong>，用于统计封号时间线。</li>
+    </ul>
+
+    <h2>管理链接</h2>
+    <ul>
+      <li>提交后会给你一个随机生成的管理链接，只显示这一次。服务器只保存它的哈希，看不到链接本身。</li>
+      <li>凭链接可以修改答案（比如账号后来被封了）或删除整份问卷；删除就是从数据库里彻底删掉。</li>
+      <li>链接丢了无法找回，也没有别的办法认领一份问卷。</li>
+    </ul>
+
+    <h2>会公开什么</h2>
+    <ul>
+      <li>看板只展示汇总统计，不展示单份问卷。</li>
+      <li>自由填写的文字（Google Play 其他付款方式、补充说明）不公开，只用来人工归纳新的问题。</li>
+      <li>邮箱后缀、卡号前 6 位只在统计里出现，样本少于 5 份的取值合并为「其他」，避免少见的取值指向具体的人。</li>
+    </ul>
+
+    <h2>和检测站的关系</h2>
+    <ul>
+      <li>
+        检测站（<a href={DETECT_URL} target="_blank" rel="noopener">环境检测</a>）和问卷站是两个分开部署的网站。问卷在新标签页打开检测站，两站之间不直接传任何数据，检测结果只靠你自己复制结果码、粘贴回问卷。
+      </li>
+      <li>
+        检测站上，你的国内 IP 只在你的浏览器里显示，不会发给任何服务器；Claude 出口 IP 会发给检测站的服务器，由它向 IP 数据库查询属性，只以加盐哈希为 key
+        缓存 24 小时，不保存 IP 原文、不记访问日志。详见<a href={`${DETECT_URL}privacy`} target="_blank" rel="noopener">检测站隐私说明</a>。
+      </li>
+    </ul>
+
+    <h2>没有的东西</h2>
+    <ul>
+      <li>没有统计、广告、追踪像素，也不从任何 CDN 加载脚本或字体，它们都随本站一起发布。</li>
+      <li>问卷页不访问任何第三方服务。</li>
+    </ul>
+
+    <h2>托管与开源</h2>
+    <p>问卷站托管在 Cloudflare Workers，Worker 关闭日志与可观测性功能。Cloudflare 作为托管平台会处理这些请求，受其自身隐私政策约束。</p>
+    <p>全部代码以 AGPL-3.0 协议在 <a href="https://github.com/Nooobhh/claude-analysis" rel="noopener">GitHub</a> 开源，上面每一条都可以在源码里核对。</p>
+  </article>
+</Base>

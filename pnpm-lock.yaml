@@ -30,6 +30,9 @@ importers:
       '@types/node':
         specifier: ^22.20.4
         version: 22.20.4
+      wrangler:
+        specifier: ^4.144.0
+        version: 4.144.0(@types/node@22.20.4)
 
   apps/detect:
     dependencies:

@@ -11,6 +11,8 @@
 
 ## Agent 行为约定
 - 继承全局 ~/CLAUDE.md 编码原则；不走 /ohaze:ship，按 ROADMAP 当前主线逐项直接开发，每步汇报
+- 检测站是项目主体、长期维护（以后可能迁服务器）；问卷站是短期附属，留在 CF，可能下线
+- 检测站不得依赖问卷站：问卷站下线后检测站照常可用
 - 前端样式唯一依据 = `DESIGN.md`（Vercel 风中立工具风，Geist 自托管）
 - 可借用 FuckClaude / MyIP（均 MIT）的代码，搬运时在文件头保留原版权声明
 - 当前阶段不做总分 / 加权评分，单项只按客观规则标「正常 / 注意 / 异常」；评分等数据站样本足够后校准
@@ -19,9 +21,9 @@
 - 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），问卷站 `apps/data`（Astro 7）
 - 两站共用的类型与样式 token 在 `packages/shared`（样式 `styles/global.css`）；两站互不导入对方代码
 - 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）、`pnpm dev:data`（问卷站 :4322）
-- 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + astro sync + 两套 tsc）、`pnpm run deploy`（构建 + 部署）
+- 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + astro sync + 两套 tsc）、`pnpm run deploy` / `deploy:data`（构建 + 部署检测站 / 问卷站）
 - `pnpm deploy` 是 pnpm 内置命令，部署必须写 `pnpm run deploy`
-- 正常发布 = push main，由 `.github/workflows/deploy.yml` 部署；本地 `pnpm run deploy` 仅应急（页脚会标「含未提交改动」）
+- 正常发布 = push main，由 `.github/workflows/deploy.yml` 先部署检测站、再部署问卷站；本地 `pnpm run deploy` 仅应急（页脚会标「含未提交改动」）
 - 页脚版本 / commit 在构建时由 `src/lib/build-info.ts`（两站各一份）读 package.json 与 git
 - Worker 入口 `apps/detect/worker/index.ts`，只接 `/api/*`；配置 `apps/detect/wrangler.jsonc`
 - 问卷：设计 `docs/specs/survey.md`；字段在 shared `survey.ts`，检测快照在 `snapshot.ts`，改题先改 spec
@@ -38,16 +40,18 @@
 - 零第三方前端脚本（统计 / 广告 / 像素 / CDN 一律禁止）；浏览器必须访问的第三方全部列进隐私页
 - `/api/ip` 不提供任意 IP 查询：按调用方限频，传入 IP ≠ 请求者 IP 时收紧限额
 - 检测结果 JSON 结构与问卷字段 schema 统一放 `packages/shared`，两站共用，不各自定义
+- 问卷站不读取请求 IP（含 CF-Connecting-IP 等头）、不存 IP，Worker 关日志；防刷不能靠 IP
+- 问卷站隐私页 `apps/data/src/pages/privacy.astro` 是对实现的承诺：改收集字段、第三方时同步改它
 
 ## 集成点
 - 检测站：Cloudflare Workers（静态资源 + Worker API + KV 缓存），线上 `claude-analysis.ohaze.workers.dev`
 - 仓库：`github.com/Nooobhh/claude-analysis`（公开）；页脚链接写在 `src/layouts/Base.astro` 的 `REPO_URL`
-- 问卷站（数据站）：Cloudflare Workers，另用一个 workers.dev 域名（未部署）；两站独立部署，以后可能迁服务器
+- 问卷站：Cloudflare Workers `claudeban.ohaze.workers.dev`，目前只有静态资源；配置 `apps/data/wrangler.jsonc`
 - 检测结果由用户复制「结果码」粘贴进问卷，两站之间不直接传数据；问卷站不接收原始 IP
 - 浏览器直连：Anthropic 8 域名 trace、ipip.net / 又拍云（国内 IP）、Cloudflare / Google STUN、Fastly / Surfshark / ipleak（DNS）
 - Worker 访问：proxycheck.io + ipapi.is 并行（记 `flaggedBy` / `typeBy`，分歧前端并排显示），ipinfo.io 兜底；status.claude.com
 - 原生 IP：Worker 从 RIPE 的 RDAP 入口查（各 RIR 互相跳转）；落到 ARIN 时常 525，改走 whois.arin.net:43
 - Workers 出口 IP 多人共享，第三方匿名额度在线上基本不可用（2026-09-30 实测 proxycheck 403、ipinfo 429），一律配 key
-- 增删任何第三方必须同步 `src/pages/privacy.astro` 的清单
+- 增删任何第三方必须同步检测站 `src/pages/privacy.astro` 的清单
 
 <!-- 本文件只记 agent 指令。进度 / 待办 / bug → ROADMAP.md；版本变更 → CHANGELOG.md -->

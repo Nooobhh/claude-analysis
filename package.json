@@ -11,7 +11,8 @@
     "dev:data": "pnpm --filter @claude-analysis/data dev",
     "build": "pnpm --filter @claude-analysis/detect build",
     "typecheck": "pnpm -r typecheck",
-    "deploy": "pnpm --filter @claude-analysis/detect run deploy"
+    "deploy": "pnpm --filter @claude-analysis/detect run deploy",
+    "deploy:data": "pnpm --filter @claude-analysis/data run deploy"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

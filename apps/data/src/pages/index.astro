@@ -176,6 +176,19 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
             </li>
             <li>点检测站上的「复制结果码」，回到这里粘贴。</li>
           </ol>
+          <div class="detect__privacy">
+            <p class="detect__privacy-title">关于隐私</p>
+            <ul>
+              <li>结果码只含检测结论（出口国家、网络类型、风险标记、时区、语言等），不含任何 IP。</li>
+              <li>问卷站不读取、也不保存你的 IP。</li>
+              <li>检测站上，你的国内 IP 只在你的浏览器里显示，不会发给任何服务器；Claude 出口 IP 只用来向 IP 数据库查询属性，以加盐哈希缓存 24 小时，不保存原文、不记日志。</li>
+            </ul>
+            <p>
+              <a href={`${DETECT_URL}privacy`} target="_blank" rel="noopener">检测站隐私说明</a>{' · '}<a href="/privacy" target="_blank"
+                >问卷站隐私说明</a
+              >
+            </p>
+          </div>
           <Question id="resultCode" label="结果码" hint="预览：检测站的「复制结果码」还没做，随便粘贴一段文字就能看到带入效果">
             <textarea class="input textarea textarea--code" name="resultCode" rows="3" placeholder="粘贴结果码" spellcheck="false"></textarea>
           </Question>
@@ -247,7 +260,8 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
 
     <div class="survey__nav">
       <button class="btn" id="prev" type="button" hidden>上一步</button>
-      <button class="btn btn--primary" id="next" type="submit">下一步</button>
+      <!-- 脚本就绪后才启用：否则会按默认方式 GET 提交，把答案带进 URL -->
+      <button class="btn btn--primary" id="next" type="submit" disabled>下一步</button>
     </div>
   </form>
 

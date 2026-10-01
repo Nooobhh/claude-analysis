@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "typecheck": "astro sync && tsc --noEmit"
+    "typecheck": "astro sync && tsc --noEmit",
+    "deploy": "astro build && wrangler deploy"
   },
   "dependencies": {
     "@claude-analysis/shared": "workspace:*",
@@ -14,6 +15,7 @@
     "astro": "^7.3.5"
   },
   "devDependencies": {
-    "@types/node": "^22.20.4"
+    "@types/node": "^22.20.4",
+    "wrangler": "^4.144.0"
   }
 }

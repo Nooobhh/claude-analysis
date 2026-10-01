@@ -404,6 +404,25 @@
   vertical-align: middle;
 }
 
+.detect__privacy {
+  margin: 10px 0 2px;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--border);
+  color: var(--fg-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.detect__privacy-title {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.detect__privacy ul {
+  margin: 4px 0;
+  padding-left: 18px;
+}
+
 .textarea--code {
   min-height: 72px;
   font-family: var(--font-mono);

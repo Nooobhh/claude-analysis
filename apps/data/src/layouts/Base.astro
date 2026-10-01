@@ -10,9 +10,10 @@ const REPO_URL = 'https://github.com/Nooobhh/claude-analysis';
 interface Props {
   title: string;
   description: string;
+  current?: 'privacy';
 }
 
-const { title, description } = Astro.props;
+const { title, description, current } = Astro.props;
 ---
 
 <!doctype html>
@@ -40,6 +41,7 @@ const { title, description } = Astro.props;
         <nav class="nav">
           <!-- 新标签页打开，避免离开问卷丢掉已填的答案 -->
           <a href={DETECT_URL} target="_blank" rel="noopener">环境检测</a>
+          <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>隐私</a>
         </nav>
       </div>
     </header>
@@ -52,6 +54,7 @@ const { title, description } = Astro.props;
       <div class="container">
         <span>开源 · AGPL-3.0</span>
         <a href={REPO_URL} rel="noopener">GitHub</a>
+        <a href="/privacy">隐私说明</a>
         <span class="build">
           v{VERSION}
           {

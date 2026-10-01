@@ -5,10 +5,10 @@
 
 检测站：<https://claude-analysis.ohaze.workers.dev> ｜ 源码：<https://github.com/Nooobhh/claude-analysis>
 
-两个站，一个仓库：
+两个站，一个仓库。检测站是项目主体、长期维护；问卷站是阶段性的附属站点，用来收集封号数据：
 
 - **检测站**：在浏览器里检测你访问 Claude 时的网络环境——Claude 各域名的出口 IP 是否一致、IP 是否漂移、IP 属性与风险标记、系统时区 / 语言 / 字体等环境指纹、WebRTC 与 DNS 泄露、服务可用性。
-- **问卷站**（开发中）：匿名问卷收集使用环境与封号结果，检测结果复制「结果码」即可带入；之后加看板，按网络 / 环境维度展示样本中的封禁占比，并提供教程。
+- **问卷站**（开发中，claudeban）：匿名问卷收集使用环境与封号结果，检测结果复制「结果码」即可带入；之后加看板，按网络 / 环境维度展示样本中的封禁占比，并提供教程。问卷站不读取、不保存 IP。
 
 ## 为什么
 
@@ -22,7 +22,7 @@
   Worker：/api/ip（查 IP 属性）、/api/status（服务状态中转）
         │ 结果码（签名，不含原始 IP；用户复制粘贴）
         ▼
-问卷站（Cloudflare Workers，另一个域名，唯一存数据的地方）
+问卷站 claudeban（Cloudflare Workers，唯一存数据的地方，不读取 IP）
   问卷 / 看板 / 教程 / 公开聚合数据
 ```
 
@@ -37,12 +37,13 @@ pnpm dev:worker   # 构建后用 wrangler dev 跑 Worker + 静态资源 http://l
 pnpm dev:data     # 问卷站 http://localhost:4322
 pnpm build        # 构建检测站到 apps/detect/dist
 pnpm typecheck    # 生成 Worker 类型，检查两站与 Worker 的类型
-pnpm run deploy   # 本地手动部署，仅应急用（需先 wrangler login；不能省略 run）
+pnpm run deploy   # 本地手动部署检测站，仅应急用（需先 wrangler login；不能省略 run）
+pnpm run deploy:data  # 同上，部署问卷站
 ```
 
 ## 部署
 
-推送到 `main` 后由 GitHub Actions（`.github/workflows/deploy.yml`）自动做类型检查并部署到 Cloudflare Workers。页脚显示的 commit 就是线上正在运行的代码，可以点开核对。
+推送到 `main` 后由 GitHub Actions（`.github/workflows/deploy.yml`）自动做类型检查，并先后部署检测站与问卷站（claudeban.ohaze.workers.dev）到 Cloudflare Workers。页脚显示的 commit 就是线上正在运行的代码，可以点开核对。
 
 仓库需要配置：
 

@@ -435,3 +435,4 @@ document.querySelector('#copy-link')?.addEventListener('click', async () => {
 history.replaceState({ step: 0 }, '');
 update();
 go(0, false);
+nextBtn.disabled = false;
