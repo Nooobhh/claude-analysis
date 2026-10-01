@@ -17,8 +17,6 @@ export interface Result {
   tag?: string;
   value: Part[];
   reason?: string;
-  /** 常显的子行（如 WebRTC 各 STUN 的出口） */
-  rows?: Detail[];
   /** 折叠的明细 */
   details?: Detail[];
 }

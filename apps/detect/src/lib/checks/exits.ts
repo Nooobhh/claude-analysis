@@ -60,7 +60,7 @@ export function judgeDomestic(d: Domestic | null, claude: Trace | null): Result 
       reason: `${d.place} · 国内站点也经过代理（全局模式），这不是你的宽带 IP`,
     };
   }
-  return { value: [...flag('CN'), ip(d.ip)], reason: d.place };
+  return { tag: '直连', value: [...flag('CN'), ip(d.ip)], reason: d.place };
 }
 
 export function judgeProxied(claude: Trace | null, d: Domestic | null): Result {

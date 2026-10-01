@@ -244,17 +244,26 @@ code {
 }
 
 .card__title {
-  color: var(--fg-muted);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.card__num {
+  color: var(--fg-subtle);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .card__desc {
-  margin-top: 2px;
-  color: var(--fg-subtle);
-  font-size: 12px;
+  margin-top: 4px;
+  color: var(--fg-muted);
+  font-size: 13px;
 }
 
 .grid {
@@ -264,40 +273,30 @@ code {
   margin-top: 16px;
 }
 
-@media (min-width: 720px) {
+@media (min-width: 900px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .panel--wide {
-    grid-column: span 2;
+    grid-column: 1 / -1;
   }
 }
 
-@media (min-width: 1024px) {
-  .grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@media (min-width: 720px) and (max-width: 1023px) {
-  /* 两列时三张 IP 卡片排不齐，改成一列三行的横条 */
-  .grid--ips {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ---------- Summary ---------- */
+/* ---------- 结论卡：统计 + 发现的问题 ---------- */
 
 .summary {
   position: relative;
+  overflow: hidden;
+}
+
+.summary__top {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
   padding: 20px;
-  overflow: hidden;
 }
 
 .summary__progress {
@@ -363,6 +362,73 @@ code {
 .summary__actions {
   display: flex;
   gap: 8px;
+}
+
+.issues {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.issues__title {
+  margin-bottom: 8px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.issues__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.issue {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'tag title'
+    'tag reason';
+  column-gap: 12px;
+  align-items: center;
+  margin: 0 -8px;
+  padding: 8px;
+  border-radius: 8px;
+  color: var(--fg);
+  text-decoration: none;
+  transition: background-color 150ms ease;
+}
+
+.issue:hover {
+  background: var(--bg-subtle);
+}
+
+.issue .tag {
+  grid-area: tag;
+  align-self: start;
+}
+
+.issue__title {
+  grid-area: title;
+  font-weight: 500;
+}
+
+.issue__title::after {
+  content: ' →';
+  color: var(--fg-subtle);
+}
+
+.issue__reason {
+  grid-area: reason;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.issue__reason:empty {
+  display: none;
+}
+
+.issues__empty {
+  color: var(--ok);
+  font-size: 13px;
 }
 
 /* ---------- Button ---------- */
@@ -455,55 +521,14 @@ code {
   transform: translateX(14px);
 }
 
-/* ---------- IP 大卡片 ---------- */
-
-.ipcard {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-}
-
-.ipcard__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-/* 与 .check__value 同时生效，提高优先级改为左对齐 */
-.ipcard .ipcard__value {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  min-height: 34px;
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-  overflow-wrap: anywhere;
-}
-
-.ipcard__value .flag {
-  width: 32px;
-  height: 24px;
-}
-
-.ipcard__value .skeleton {
-  width: 60%;
-  height: 26px;
-}
-
-.ipcard .check__reason {
-  margin-top: -4px;
-}
-
 /* ---------- 功能卡片与检测行 ---------- */
 
 .panel {
   padding: 20px 20px 8px;
+}
+
+.panel--table {
+  margin-top: 16px;
 }
 
 .panel__rows {
@@ -591,39 +616,94 @@ code {
   object-fit: cover;
 }
 
-/* 常显子行 */
-.check__rows {
-  margin-top: 8px;
-  padding: 4px 12px;
-  border-radius: 8px;
-  background: var(--bg-subtle);
-  font-size: 13px;
+/* 出口一览表：窄屏每行折成「通道 + 状态 / IP / 说明」三行 */
+.xtable {
+  margin-top: 12px;
 }
 
-.subrow {
-  display: flex;
+.xrow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    'channel status'
+    'ip ip'
+    'note note'
+    'details details';
+  gap: 4px 12px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
+  padding: 12px 0;
 }
 
-.subrow + .subrow {
+.xrow + .xrow {
   border-top: 1px solid var(--border);
 }
 
-.subrow__label {
-  color: var(--fg-muted);
+.xrow--head {
+  display: none;
+  padding: 0 0 8px;
+  color: var(--fg-subtle);
+  font-size: 12px;
 }
 
-.subrow__value {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  text-align: right;
-  overflow-wrap: anywhere;
+.xrow__channel {
+  grid-area: channel;
+  display: flex;
+  flex-direction: column;
+}
+
+.xrow .xrow__ip {
+  grid-area: ip;
+  justify-content: flex-start;
+  font-size: 15px;
+}
+
+.xrow__note {
+  grid-area: note;
+  margin: 0;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.xrow__status {
+  grid-area: status;
+  justify-self: end;
+}
+
+.xrow__details {
+  grid-area: details;
+}
+
+.xrow .skeleton {
+  width: 120px;
+}
+
+@media (min-width: 720px) {
+  /* 每行是独立网格，前两列用固定宽度保证各行对齐 */
+  .xrow {
+    grid-template-columns: 170px 200px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'channel ip note status'
+      'details details details details';
+    column-gap: 16px;
+  }
+
+  .xrow--head {
+    display: grid;
+  }
+
+  .xrow--head > :nth-child(1) {
+    grid-area: channel;
+  }
+  .xrow--head > :nth-child(2) {
+    grid-area: ip;
+  }
+  .xrow--head > :nth-child(3) {
+    grid-area: note;
+  }
+  .xrow--head > :nth-child(4) {
+    grid-area: status;
+    justify-self: end;
+  }
 }
 
 /* 折叠明细 */
@@ -666,12 +746,27 @@ code {
   overflow-wrap: anywhere;
 }
 
-[data-status='bad']:is(dd, .subrow__value) {
+dd[data-status='bad'] {
   color: var(--bad);
 }
 
-[data-status='warn']:is(dd, .subrow__value) {
+dd[data-status='warn'] {
   color: var(--warn);
+}
+
+/* 从「发现的问题」跳转过来时高亮目标行 */
+.check {
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.check:target {
+  animation: target-flash 1.6s ease-out;
+}
+
+@keyframes target-flash {
+  from {
+    background: var(--warn-bg);
+  }
 }
 
 /* ---------- Tag ---------- */
@@ -679,15 +774,24 @@ code {
 .tag {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   flex: none;
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
   background: var(--unknown-bg);
   color: var(--unknown);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
+}
+
+.tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
 }
 
 .tag[data-status='ok'] {
@@ -708,11 +812,13 @@ code {
 .tag[data-status='neutral'] {
   background: var(--bg-subtle);
   color: var(--fg-muted);
-  font-weight: 500;
 }
 
-.tag[data-status='pending'] {
-  font-weight: 500;
+.tag[data-status='neutral']::before {
+  display: none;
+}
+
+.tag[data-status='pending']::before {
   animation: pulse 1.2s ease-in-out infinite;
 }
 

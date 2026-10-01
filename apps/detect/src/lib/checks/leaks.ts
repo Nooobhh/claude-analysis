@@ -165,40 +165,43 @@ export async function judgeWebrtc(probes: WebrtcProbe[] | undefined, exits: Trac
   };
   const seen = await Promise.all(probes.map(async (p) => ({ ...p, ...(p.ip ? await classify(p.ip) : { kind: null, cc: undefined }) })));
 
-  const rows: Detail[] = seen.map((p) => ({
+  const details: Detail[] = seen.map((p) => ({
     label: p.server.replace(/^stun:/, '').replace(/:\d+$/, ''),
     value: p.ip ? [...flag(p.cc), ip(p.ip)] : ['无结果'],
     status: p.kind === 'mainland' ? 'bad' : p.kind === 'other' ? 'warn' : undefined,
   }));
-  if (!seen.some((p) => p.ip)) return { status: 'ok', tag: '未泄露', value: [], reason: 'UDP 被阻断或 WebRTC 受限，网页拿不到你的 IP', rows };
+  // 出口 IP 列：去重后的 UDP 出口
+  const uniq = [...new Map(seen.filter((p) => p.ip).map((p) => [p.ip, p])).values()];
+  const value = uniq.length ? uniq.flatMap((p, i) => [...(i ? [' '] : []), ...flag(p.cc), ip(p.ip!)]) : ['—'];
+  if (!uniq.length) return { status: 'ok', tag: '未泄露', value, reason: 'UDP 被阻断或 WebRTC 受限，网页拿不到你的 IP', details };
   if (seen.some((p) => p.kind === 'mainland')) {
-    return { status: 'bad', tag: '泄露国内 IP', value: [], reason: 'WebRTC 绕过代理暴露了中国大陆 IP，任何网页脚本都能读到', rows };
+    return { status: 'bad', tag: '泄露国内 IP', value, reason: 'WebRTC 绕过代理暴露了中国大陆 IP，任何网页脚本都能读到', details };
   }
   if (seen.some((p) => p.kind === 'other')) {
-    return { status: 'warn', tag: '可能泄露', value: [], reason: 'UDP 出口与 Claude 出口不同，网页能通过 WebRTC 看到另一个 IP', rows };
+    return { status: 'warn', tag: '可能泄露', value, reason: 'UDP 出口与 Claude 出口不同，网页能通过 WebRTC 看到另一个 IP', details };
   }
-  return { status: 'ok', tag: '未泄露', value: [], reason: 'UDP 出口与 Claude 出口一致', rows };
+  return { status: 'ok', tag: '未泄露', value, reason: 'UDP 出口与 Claude 出口一致', details };
 }
 
 export function judgeDns(probe: DnsProbe | null): Result {
-  if (!probe) return { status: 'unknown', tag: '检测失败', value: [], reason: 'DNS 检测接口都没有返回' };
+  if (!probe) return { status: 'unknown', tag: '检测失败', value: ['—'], reason: 'DNS 检测接口都没有返回' };
   const { resolvers, provider } = probe;
   const levelOf = (cc: string | null) => (cc === 'CN' ? 'bad' : cc === 'HK' || cc === 'MO' ? 'warn' : undefined);
-  // 单个解析器按图示拆成「出口 + 服务商」两行；多个时每个解析器一行
-  const rows: Detail[] =
-    resolvers.length === 1
-      ? [
-          { label: 'DNS 出口', value: [...flag(resolvers[0].cc), ip(resolvers[0].ip)], status: levelOf(resolvers[0].cc) },
-          { label: '服务商', value: [resolvers[0].org ?? '未知'] },
-        ]
-      : resolvers.map((r) => ({ label: r.org ?? '解析器', value: [...flag(r.cc), ip(r.ip)], status: levelOf(r.cc) }));
+  // 出口 IP 列只放第一个解析器，其余进明细
+  const first = resolvers[0];
+  const value = [...flag(first.cc), ip(first.ip), resolvers.length > 1 ? ` 等 ${resolvers.length} 个` : ''];
+  const details: Detail[] | undefined =
+    resolvers.length > 1
+      ? resolvers.map((r) => ({ label: r.org ?? '解析器', value: [...flag(r.cc), ip(r.ip)], status: levelOf(r.cc) }))
+      : undefined;
+  const who = resolvers.length === 1 && first.org ? `${first.org} · ` : '';
   const source = `数据来源 ${provider}`;
   if (resolvers.some((r) => r.cc === 'CN')) {
-    return { status: 'bad', tag: '国内解析器', value: [], reason: `DNS 查询经国内解析器发出，Claude 所在的 Cloudflare 能看到来自中国的查询 · ${source}`, rows };
+    return { status: 'bad', tag: '国内解析器', value, reason: `${who}DNS 查询经国内解析器发出，Claude 所在的 Cloudflare 能看到来自中国的查询 · ${source}`, details };
   }
-  if (!resolvers.some((r) => r.cc)) return { status: 'unknown', tag: '无法判断', value: [], reason: `该接口不提供解析器所在地 · ${source}`, rows };
+  if (!resolvers.some((r) => r.cc)) return { status: 'unknown', tag: '无法判断', value, reason: `${who}该接口不提供解析器所在地 · ${source}`, details };
   if (resolvers.some((r) => r.cc === 'HK' || r.cc === 'MO')) {
-    return { status: 'warn', tag: '港澳解析器', value: [], reason: `有解析器位于香港 / 澳门 · ${source}`, rows };
+    return { status: 'warn', tag: '港澳解析器', value, reason: `${who}有解析器位于香港 / 澳门 · ${source}`, details };
   }
-  return { status: 'ok', tag: '未泄露', value: [], reason: `未发现国内解析器 · ${source}`, rows };
+  return { status: 'ok', tag: '未泄露', value, reason: `${who}未发现国内解析器 · ${source}`, details };
 }

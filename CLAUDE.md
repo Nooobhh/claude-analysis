@@ -36,6 +36,7 @@
 
 ## 集成点
 - 检测站：Cloudflare Workers（静态资源 + Worker API + KV 缓存），线上 `claude-analysis.ohaze.workers.dev`
+- 仓库：`github.com/Nooobhh/claude-analysis`（公开）；页脚链接写在 `src/layouts/Base.astro` 的 `REPO_URL`
 - 数据站（后续）：tokyo 服务器，Caddy 反代；接收检测站签名 token，不接收原始 IP
 - 浏览器直连：Anthropic 8 域名 trace、ipip.net / 又拍云（国内 IP）、Cloudflare / Google STUN、Fastly / Surfshark / ipleak（DNS）
 - Worker 访问：proxycheck.io + ipapi.is 并行、合并（风险项取并集，记 `flaggedBy`），ipinfo.io 兜底；status.claude.com

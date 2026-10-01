@@ -3,7 +3,7 @@
 
 ## 是什么
 
-检测站：<https://claude-analysis.ohaze.workers.dev>
+检测站：<https://claude-analysis.ohaze.workers.dev> ｜ 源码：<https://github.com/Nooobhh/claude-analysis>
 
 两个站，一个仓库：
 

@@ -1,7 +1,7 @@
 // 检测页入口：并行跑各项检测，结果到一项渲染一项；全部在浏览器本地完成，
 // 只有 Claude 出口 IP 会发给本站 Worker 查属性（见 lib/checks/ipinfo.ts）
 import { STATUS_LABEL, type CheckId, type Status } from '@claude-analysis/shared';
-import { ANTHROPIC_DOMAINS, CHECKS, REPORT_GROUPS } from '../lib/catalog';
+import { ANTHROPIC_DOMAINS, CHECKS, REPORT_GROUPS, anchorOf } from '../lib/catalog';
 import { fetchStatus, judgeLatency, judgeStatus } from '../lib/checks/availability';
 import { getDomestic, judgeConsistency, judgeDomestic, judgeDrift, judgeExit, judgeProxied } from '../lib/checks/exits';
 import {
@@ -76,8 +76,8 @@ function setTag(el: HTMLElement, status: Status | undefined, text: string | unde
   el.textContent = label ?? '';
 }
 
-function renderDetail(d: Detail, tagName: 'div' | 'dd'): HTMLElement {
-  const el = document.createElement(tagName);
+function renderDetail(d: Detail): HTMLElement {
+  const el = document.createElement('dd');
   if (d.status) el.dataset.status = d.status;
   el.append(...renderParts(d.value));
   return el;
@@ -89,14 +89,12 @@ function renderRow(id: CheckId) {
   const value = $('.check__value', root)!;
   const reason = $('.check__reason', root)!;
   const tag = $('.tag', root)!;
-  const rows = $('.check__rows', root);
   const details = $<HTMLDetailsElement>('.details', root);
   const r = results.get(id);
 
   if (!r) {
     value.innerHTML = '<span class="skeleton"></span>';
     reason.hidden = true;
-    if (rows) rows.hidden = true;
     if (details) details.hidden = true;
     tag.hidden = false;
     tag.dataset.status = 'pending';
@@ -109,23 +107,6 @@ function renderRow(id: CheckId) {
   reason.textContent = r.reason ?? '';
   setTag(tag, r.status, r.tag);
 
-  if (rows) {
-    rows.hidden = !r.rows?.length;
-    rows.replaceChildren(
-      ...(r.rows ?? []).map((d) => {
-        const line = document.createElement('div');
-        line.className = 'subrow';
-        const label = document.createElement('span');
-        label.className = 'subrow__label';
-        label.textContent = d.label;
-        const val = renderDetail(d, 'div');
-        val.className = 'subrow__value';
-        line.append(label, val);
-        return line;
-      }),
-    );
-  }
-
   if (details) {
     details.hidden = !r.details?.length;
     if (r.details?.length) {
@@ -134,7 +115,7 @@ function renderRow(id: CheckId) {
         ...r.details.flatMap((d) => {
           const dt = document.createElement('dt');
           dt.textContent = d.label;
-          return [dt, renderDetail(d, 'dd')];
+          return [dt, renderDetail(d)];
         }),
       );
     }
@@ -145,6 +126,40 @@ function counts(): Record<Status, number> {
   const c: Record<Status, number> = { ok: 0, warn: 0, bad: 0, unknown: 0 };
   for (const r of results.values()) if (r.status) c[r.status]++;
   return c;
+}
+
+const groupOf = new Map(REPORT_GROUPS.flatMap((g) => g.checks.map((c) => [c.id, g.title] as const)));
+
+/** 「发现的问题」：异常在前、注意在后，按页面顺序；点击跳到对应检测项 */
+function renderIssues(finished: boolean) {
+  const rank: Partial<Record<Status, number>> = { bad: 0, warn: 1 };
+  const hits = CHECKS.flatMap((c) => {
+    const r = results.get(c.id);
+    return r?.status && rank[r.status] !== undefined ? [{ c, r, rank: rank[r.status]! }] : [];
+  }).sort((a, b) => a.rank - b.rank);
+
+  const list = $('#issues-list')!;
+  const empty = $('#issues-empty')!;
+  $('#issues')!.hidden = !hits.length && !finished;
+  empty.hidden = !!hits.length;
+  list.replaceChildren(
+    ...hits.map(({ c, r }) => {
+      const a = document.createElement('a');
+      a.className = 'issue';
+      a.href = `#${anchorOf(c.id)}`;
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      setTag(tag, r.status, undefined);
+      const title = document.createElement('span');
+      title.className = 'issue__title';
+      title.textContent = `${groupOf.get(c.id)} · ${c.label}${r.tag ? `：${r.tag}` : ''}`;
+      const reason = document.createElement('span');
+      reason.className = 'issue__reason';
+      reason.textContent = r.reason ?? '';
+      a.append(tag, title, reason);
+      return a;
+    }),
+  );
 }
 
 function renderSummary() {
@@ -164,6 +179,7 @@ function renderSummary() {
   bar.style.opacity = finished ? '0' : '1';
   const label = $('#progress-label')!;
   label.textContent = finished ? '检测完成' : `检测中 ${done}/${total}`;
+  renderIssues(finished);
   if (finished) $('#announce')!.textContent = `检测完成：异常 ${c.bad} 项，注意 ${c.warn} 项`;
 }
 
@@ -281,7 +297,6 @@ function buildReport(): string {
       const body = [r.tag, partsText(r.value)].filter(Boolean).join(' · ') || '—';
       lines.push(`${head} ${check.label}：${body}${r.reason ? `（${r.reason}）` : ''}`);
       if (r.status === 'bad' || r.status === 'warn') {
-        for (const d of r.rows ?? []) lines.push(`    ${d.label}：${partsText(d.value)}`);
         for (const d of r.details ?? []) if (d.status) lines.push(`    ${d.label}：${partsText(d.value)}`);
       }
     }

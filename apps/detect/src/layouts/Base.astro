@@ -3,6 +3,8 @@ import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import '../styles/global.css';
 
+const REPO_URL = 'https://github.com/Nooobhh/claude-analysis';
+
 interface Props {
   title: string;
   description: string;
@@ -48,8 +50,8 @@ const { title, description, current } = Astro.props;
     <footer class="site-footer">
       <div class="container">
         <span>开源 · AGPL-3.0</span>
+        <a href={REPO_URL} rel="noopener">GitHub</a>
         <a href="/privacy">隐私说明</a>
-        <span>检测思路参考 <a href="https://github.com/LinXiaoTao/FuckClaude" rel="noopener">FuckClaude</a> 与 <a href="https://github.com/jason5ng32/MyIP" rel="noopener">MyIP</a></span>
       </div>
     </footer>
   </body>

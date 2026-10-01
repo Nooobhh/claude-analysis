@@ -1,9 +1,10 @@
 ---
 import { STATUS_LABEL } from '@claude-analysis/shared';
 import Base from '../layouts/Base.astro';
-import { CARDS, CHECKS, IP_CARDS } from '../lib/catalog';
+import { CARDS, CHECKS, EXIT_ROWS, anchorOf } from '../lib/catalog';
 
 const STATS = ['bad', 'warn', 'ok', 'unknown'] as const;
+const num = (i: number) => String(i).padStart(2, '0');
 ---
 
 <Base
@@ -22,61 +23,83 @@ const STATS = ['bad', 'warn', 'ok', 'unknown'] as const;
 
   <div class="card summary">
     <div class="summary__progress" id="progress"></div>
-    <div class="stats">
-      {
-        STATS.map((s) => (
-          <div class="stat" data-status={s} data-zero="true" hidden={s === 'unknown'}>
-            <span class="stat__num" data-count={s}>
-              0
-            </span>
-            <span class="stat__label">{STATUS_LABEL[s]}</span>
-          </div>
-        ))
-      }
-    </div>
-    <div class="summary__side">
-      <span class="summary__label" id="progress-label">检测中 0/{CHECKS.length}</span>
-      <div class="summary__actions">
-        <button class="btn" id="rerun" type="button">重新检测</button>
-        <button class="btn btn--primary" id="copy" type="button">复制报告</button>
+    <div class="summary__top">
+      <div class="stats">
+        {
+          STATS.map((s) => (
+            <div class="stat" data-status={s} data-zero="true" hidden={s === 'unknown'}>
+              <span class="stat__num" data-count={s}>
+                0
+              </span>
+              <span class="stat__label">{STATUS_LABEL[s]}</span>
+            </div>
+          ))
+        }
       </div>
+      <div class="summary__side">
+        <span class="summary__label" id="progress-label">检测中 0/{CHECKS.length}</span>
+        <div class="summary__actions">
+          <button class="btn" id="rerun" type="button">重新检测</button>
+          <button class="btn btn--primary" id="copy" type="button">复制报告</button>
+        </div>
+      </div>
+    </div>
+    <div class="issues" id="issues" hidden>
+      <h2 class="issues__title">发现的问题</h2>
+      <div class="issues__list" id="issues-list"></div>
+      <p class="issues__empty" id="issues-empty" hidden>没有发现异常或需要注意的项。</p>
     </div>
     <p class="sr-only" id="announce" aria-live="polite"></p>
   </div>
 
-  <div class="grid grid--ips">
-    {
-      IP_CARDS.map((c) => (
-        <section class="card ipcard" data-check={c.id} aria-label={c.label}>
-          <div class="ipcard__head">
-            <div>
-              <h2 class="card__title">{c.label}</h2>
-              {c.hint && <p class="card__desc">{c.hint}</p>}
+  <section class="card panel panel--table" aria-labelledby="card-exits">
+    <h2 class="card__title" id="card-exits"><span class="card__num">01</span>出口一览</h2>
+    <p class="card__desc">流量离开你设备的每条通道。正常情况下 Claude 各通道应是同一个境外 IP，WebRTC 与 DNS 不应落在国内。</p>
+    <div class="xtable" role="table" aria-labelledby="card-exits">
+      <div class="xrow xrow--head" role="row">
+        <span role="columnheader">通道</span>
+        <span role="columnheader">出口 IP</span>
+        <span role="columnheader">地区 / 说明</span>
+        <span role="columnheader">状态</span>
+      </div>
+      {
+        EXIT_ROWS.map((row) => (
+          <div class="xrow check" data-check={row.id} id={anchorOf(row.id)} role="row">
+            <div class="xrow__channel" role="cell">
+              <span class="check__name">{row.label}</span>
+              {row.hint && <span class="check__hint">{row.hint}</span>}
             </div>
-            <span class="tag" data-status="pending">
-              检测中
-            </span>
+            <div class="xrow__ip check__value" role="cell">
+              <span class="skeleton" />
+            </div>
+            <p class="xrow__note check__reason" role="cell" hidden />
+            <div class="xrow__status" role="cell">
+              <span class="tag" data-status="pending">
+                检测中
+              </span>
+            </div>
+            <details class="details xrow__details" hidden>
+              <summary />
+              <dl />
+            </details>
           </div>
-          <div class="check__value ipcard__value">
-            <span class="skeleton" />
-          </div>
-          <p class="check__reason" hidden />
-        </section>
-      ))
-    }
-  </div>
+        ))
+      }
+    </div>
+  </section>
 
   <div class="grid">
     {
-      CARDS.map((card) => (
+      CARDS.map((card, i) => (
         <section class:list={['card', 'panel', { 'panel--wide': card.wide }]} aria-labelledby={`card-${card.id}`}>
           <h2 class="card__title" id={`card-${card.id}`}>
+            <span class="card__num">{num(i + 2)}</span>
             {card.title}
           </h2>
           {card.desc && <p class="card__desc">{card.desc}</p>}
           <div class="panel__rows">
             {card.checks.map((check) => (
-              <div class="check" data-check={check.id}>
+              <div class="check" data-check={check.id} id={anchorOf(check.id)}>
                 <div class="check__main">
                   <div class="check__label">
                     <span class="check__name">{check.label}</span>
@@ -92,7 +115,6 @@ const STATS = ['bad', 'warn', 'ok', 'unknown'] as const;
                   </div>
                 </div>
                 <p class="check__reason" hidden />
-                <div class="check__rows" hidden />
                 <details class="details" hidden>
                   <summary />
                   <dl />
