@@ -39,7 +39,8 @@
 - 仓库：`github.com/Nooobhh/claude-analysis`（公开）；页脚链接写在 `src/layouts/Base.astro` 的 `REPO_URL`
 - 数据站（后续）：tokyo 服务器，Caddy 反代；接收检测站签名 token，不接收原始 IP
 - 浏览器直连：Anthropic 8 域名 trace、ipip.net / 又拍云（国内 IP）、Cloudflare / Google STUN、Fastly / Surfshark / ipleak（DNS）
-- Worker 访问：proxycheck.io + ipapi.is 并行、合并（风险项取并集，记 `flaggedBy`），ipinfo.io 兜底；status.claude.com
+- Worker 访问：proxycheck.io + ipapi.is 并行（记 `flaggedBy` / `typeBy`，分歧前端并排显示），ipinfo.io 兜底；status.claude.com
+- 原生 IP：Worker 查 `rdap.arin.net`（自动跳转各 RIR），ARIN 无国家字段时取注册人地址末行
 - Workers 出口 IP 多人共享，第三方匿名额度在线上基本不可用（2026-09-30 实测 proxycheck 403、ipinfo 429），一律配 key
 - 增删任何第三方必须同步 `src/pages/privacy.astro` 的清单
 

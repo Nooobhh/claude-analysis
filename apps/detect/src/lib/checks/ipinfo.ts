@@ -43,28 +43,65 @@ export function judgeRegion(cc: string | undefined): Result {
   return { status: 'bad', tag: '不支持', value, reason: '不在 Anthropic 公布的支持地区列表内' };
 }
 
-const NET_TYPE: Record<string, string> = {
-  residential: '家庭宽带',
-  isp: '运营商',
-  wireless: '移动网络',
-  business: '企业网络',
-  education: '教育网',
-  government: '政府网络',
-  banking: '金融机构',
+/**
+ * 两家的类型分类角度不同：proxycheck 看地址用途，ipapi.is 看所属机构，
+ * 同一个英文值（business）意思也不同，所以分开翻译
+ */
+const TYPE_LABEL: Record<RiskSource, Record<string, string>> = {
+  'proxycheck.io': { residential: '家庭宽带', business: '企业线路', wireless: '移动网络', hosting: '机房' },
+  'ipapi.is': { isp: '运营商', hosting: '机房', education: '教育网', government: '政府网络', banking: '金融机构', business: '其他机构' },
 };
+
+type RiskSource = 'proxycheck.io' | 'ipapi.is';
+
+/** 有风险数据的数据源（ipinfo 只有基础属性，不参与） */
+const riskSources = (info: IpInfo) => info.sources.filter((s): s is RiskSource => s !== 'ipinfo');
+
+/** 两家结论并排的值，如「ipapi.is 机房 · proxycheck.io 企业线路」 */
+const sideBySide = (items: Array<[string, string]>) => [items.map(([src, text]) => `${src} ${text}`).join(' · ')];
+
+const DISAGREE = '两家数据库结论不同，Claude 风控采用的数据库可能取任意一方';
 
 export function judgeType(r: IpApiResponse | null): Result {
   const info = infoOf(r);
   if (!info) return failed(r);
   const risk = info.risk;
   if (!risk) return { status: 'unknown', tag: '暂无数据', value: [], reason: '风险数据源暂时不可用，只拿到了基础属性' };
-  if (risk.isDatacenter || risk.type === 'hosting') {
-    const by = risk.flaggedBy.datacenter.length && info.sources.length > 1 ? `，由 ${risk.flaggedBy.datacenter.join('、')} 标记` : '';
-    return { status: 'warn', tag: '机房', value: [risk.datacenter ?? ''], reason: `机房 IP 容易被识别为代理或 VPN${by}` };
+
+  const verdicts = riskSources(info).map((src) => {
+    const raw = risk.typeBy[src];
+    const hosting = risk.flaggedBy.datacenter.includes(src) || raw === 'hosting';
+    return { src, hosting, label: hosting ? '机房' : (TYPE_LABEL[src][raw ?? ''] ?? '未知') };
+  });
+  const both = verdicts.length > 1 ? sideBySide(verdicts.map((v) => [v.src, v.label])) : [];
+  const hostingCount = verdicts.filter((v) => v.hosting).length;
+
+  if (hostingCount && hostingCount === verdicts.length) {
+    return { status: 'warn', tag: '机房', value: [risk.datacenter ?? ''], reason: '机房 IP 容易被识别为代理或 VPN' };
   }
-  if (risk.isMobile) return { status: 'ok', tag: NET_TYPE.wireless, value: [] };
-  const label = NET_TYPE[risk.type ?? ''];
-  return label ? { status: 'ok', tag: label, value: [] } : { status: 'unknown', tag: '未知', value: [risk.type ?? ''] };
+  if (hostingCount) return { status: 'warn', tag: '存在分歧', value: both, reason: DISAGREE };
+  // 没有机房判定：以 proxycheck 的用途分类为主，两家说法不同时并排列出
+  const primary = risk.isMobile ? '移动网络' : (verdicts.find((v) => v.src === 'proxycheck.io') ?? verdicts[0]).label;
+  const same = new Set(verdicts.map((v) => v.label)).size === 1;
+  return { status: primary === '未知' ? 'unknown' : 'ok', tag: primary, value: same ? [] : both };
+}
+
+/** 原生 IP：IP 段登记国家与实际定位国家一致；不一致即「广播 IP」 */
+export function judgeNative(r: IpApiResponse | null, cc: string | undefined): Result {
+  const info = infoOf(r);
+  if (!info) return failed(r, false);
+  const reg = info.registration;
+  if (!reg?.country || !cc || cc === 'XX' || cc === 'T1') {
+    return { status: 'unknown', tag: '无法判断', value: [], reason: '没有查到 IP 段的登记国家' };
+  }
+  const value = ['登记于 ', ...flag(reg.country), countryName(reg.country), reg.rir ? ` · ${reg.rir}` : ''];
+  if (reg.country === cc) return { status: 'ok', tag: '原生 IP', value, reason: reg.netname ? `网段 ${reg.netname}` : undefined };
+  return {
+    status: 'warn',
+    tag: '广播 IP',
+    value,
+    reason: `IP 段登记在${countryName(reg.country)}，实际定位在${countryName(cc)}，常见于机房把别国 IP 段拿到当地使用`,
+  };
 }
 
 export function judgeAsn(r: IpApiResponse | null): Result {
@@ -83,18 +120,26 @@ export function judgeLocation(r: IpApiResponse | null): Result {
   return { value: [place], reason: [info.timezone && `时区 ${info.timezone}`, `数据来源 ${info.sources.join(' + ')}`].filter(Boolean).join(' · ') };
 }
 
-/** VPN / 代理 / Tor / 滥用：命中即异常 */
+/** VPN / 代理 / Tor / 滥用：所有数据源都标记为异常，只有部分标记为「存在分歧」 */
 export function judgeFlag(r: IpApiResponse | null, key: 'vpn' | 'proxy' | 'tor' | 'abuser'): Result {
   const info = infoOf(r);
   if (!info) return failed(r, false);
   const risk = info.risk;
   if (!risk) return { status: 'unknown', tag: '暂无数据', value: [] };
+  const [hitText, missText] = key === 'abuser' ? ['有记录', '无记录'] : ['检测到', '未检测到'];
   const note = { vpn: risk.vpnService, proxy: null, tor: null, abuser: risk.abuserScore }[key];
+  const sources = riskSources(info);
   const by = risk.flaggedBy[key];
-  // 两家并行查询时任一家标记即命中，注明是谁标的
-  const reason = by.length && info.sources.length > 1 ? `由 ${by.join('、')} 标记` : undefined;
-  if (key === 'abuser') return by.length ? { status: 'bad', tag: '有记录', value: [note ?? ''], reason } : { status: 'ok', tag: '无记录', value: [] };
-  return by.length ? { status: 'bad', tag: '检测到', value: [note ?? ''], reason } : { status: 'ok', tag: '未检测到', value: [] };
+  if (!by.length) return { status: 'ok', tag: missText, value: [] };
+  if (by.length >= sources.length) {
+    return { status: 'bad', tag: hitText, value: [note ?? ''], reason: sources.length > 1 ? `${by.join('、')} 均标记` : undefined };
+  }
+  return {
+    status: 'warn',
+    tag: '存在分歧',
+    value: sideBySide(sources.map((src) => [src, by.includes(src) ? hitText : missText])),
+    reason: [DISAGREE, note].filter(Boolean).join(' · '),
+  };
 }
 
 /** proxycheck.io 的 0–100 风险分：≥67 高、≥34 中（其官方分档） */

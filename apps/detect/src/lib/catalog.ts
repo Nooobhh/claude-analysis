@@ -44,6 +44,7 @@ export const CARDS: CardDef[] = [
     desc: '只有 claude.ai 出口 IP 会发给本站查询，结果缓存 24 小时',
     checks: [
       { id: 'ip.region', label: '地区' },
+      { id: 'ip.native', label: '原生 IP', hint: '登记国家与实际位置是否一致' },
       { id: 'ip.type', label: '网络类型' },
       { id: 'ip.asn', label: 'ASN' },
       { id: 'ip.org', label: '运营商' },
@@ -53,7 +54,7 @@ export const CARDS: CardDef[] = [
   {
     id: 'risk',
     title: 'IP 风险标记',
-    desc: 'proxycheck.io 与 ipapi.is 同时查询，任一家标记即算命中',
+    desc: 'proxycheck.io 与 ipapi.is 同时查询，两家结论不同时并排显示',
     checks: [
       { id: 'ip.vpn', label: 'VPN' },
       { id: 'ip.proxy', label: '代理' },

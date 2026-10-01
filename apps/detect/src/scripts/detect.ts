@@ -21,6 +21,7 @@ import {
   judgeCrossTimezone,
   judgeFlag,
   judgeLocation,
+  judgeNative,
   judgeOrg,
   judgeRegion,
   judgeScore,
@@ -247,6 +248,7 @@ async function run() {
     const r = target ? await fetchIpInfo(target) : null;
     const cc = (c ?? a)?.loc || infoOf(r)?.countryCode || undefined;
     put('ip.region', judgeRegion(cc));
+    put('ip.native', judgeNative(r, cc));
     put('ip.type', judgeType(r));
     put('ip.asn', judgeAsn(r));
     put('ip.org', judgeOrg(r));

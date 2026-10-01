@@ -19,6 +19,7 @@ export const CHECK_IDS = [
   'exit.consistency',
   'exit.drift',
   'ip.region',
+  'ip.native',
   'ip.type',
   'ip.asn',
   'ip.org',
@@ -76,6 +77,18 @@ export interface IpRisk {
   riskScore: number | null;
   /** 每个风险项是哪些数据源标记的 */
   flaggedBy: Record<RiskFlag, IpSource[]>;
+  /** 各数据源各自给出的网络类型原始值（两家分类角度不同，分歧时并排显示） */
+  typeBy: Partial<Record<IpSource, string>>;
+}
+
+/** IP 段在注册机构（RIR）的登记信息，用于判断原生 IP */
+export interface IpRegistration {
+  /** 登记国家（ISO 3166-1 alpha-2，大写）；查不到为 null */
+  country: string | null;
+  /** ARIN / RIPE NCC / APNIC / LACNIC / AFRINIC */
+  rir: string | null;
+  /** 网段名 */
+  netname: string | null;
 }
 
 /** POST /api/ip 返回的 IP 属性，已按数据源归一化 */
@@ -93,6 +106,8 @@ export interface IpInfo {
   org: string | null;
   /** null = 当前数据源不提供风险标记 */
   risk: IpRisk | null;
+  /** RDAP 查到的登记信息；查询失败为 null */
+  registration: IpRegistration | null;
 }
 
 export type IpApiError = 'bad_request' | 'rate_limited' | 'upstream';

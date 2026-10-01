@@ -1,5 +1,6 @@
-// IP 属性查询：ipapi.is 与 proxycheck.io 并行查、合并结果（风险项任一家标记即命中）；两家都失败时 ipinfo 兜底（只有基础属性）
-import type { IpInfo, IpRisk, IpSource, RiskFlag } from '@claude-analysis/shared';
+// IP 属性查询：ipapi.is 与 proxycheck.io 并行查、合并结果（保留各家结论，分歧由前端并排显示）；
+// 两家都失败时 ipinfo 兜底（只有基础属性）。同时查 RDAP 拿 IP 段登记国家，用于判断原生 IP
+import type { IpInfo, IpRegistration, IpRisk, IpSource, RiskFlag } from '@claude-analysis/shared';
 
 export interface Secrets {
   /** 缓存 / 限频 key 的哈希盐；未配置时不缓存 */
@@ -78,6 +79,7 @@ async function fromIpapi(ip: string, key: string): Promise<IpInfo | null> {
   return {
     ip,
     sources: ['ipapi.is'],
+    registration: null,
     countryCode: d.location.country_code?.toUpperCase() ?? null,
     region: d.location.state ?? null,
     city: d.location.city ?? null,
@@ -96,6 +98,7 @@ async function fromIpapi(ip: string, key: string): Promise<IpInfo | null> {
       datacenter: d.datacenter?.datacenter ?? null,
       vpnService: d.vpn?.service ?? null,
       abuserScore: d.company?.abuser_score ?? d.asn?.abuser_score ?? null,
+      typeBy: d.company?.type ?? d.asn?.type ? { 'ipapi.is': (d.company?.type ?? d.asn?.type)! } : {},
       flaggedBy: flagsOf('ipapi.is', {
         vpn: !!d.is_vpn,
         proxy: !!d.is_proxy,
@@ -140,6 +143,7 @@ async function fromProxycheck(ip: string, key?: string): Promise<IpInfo | null> 
   return {
     ip,
     sources: ['proxycheck.io'],
+    registration: null,
     countryCode: l.country_code?.toUpperCase() ?? null,
     region: l.region_name ?? null,
     city: l.city_name ?? null,
@@ -158,6 +162,7 @@ async function fromProxycheck(ip: string, key?: string): Promise<IpInfo | null> 
       datacenter: null,
       vpnService: d.operator?.name ?? null,
       abuserScore: null,
+      typeBy: type ? { 'proxycheck.io': type } : {},
       flaggedBy: flagsOf('proxycheck.io', {
         vpn: !!x.vpn,
         proxy: !!x.proxy,
@@ -189,6 +194,7 @@ async function fromIpinfo(ip: string, token?: string): Promise<IpInfo | null> {
   return {
     ip,
     sources: ['ipinfo'],
+    registration: null,
     countryCode: d.country?.toUpperCase() ?? null,
     region: d.region ?? null,
     city: d.city ?? null,
@@ -199,7 +205,7 @@ async function fromIpinfo(ip: string, token?: string): Promise<IpInfo | null> {
   };
 }
 
-/** 两家结果合并：基础属性优先 ipapi.is；风险项取并集，并记下是谁标的 */
+/** 两家结果合并：基础属性优先 ipapi.is；风险项取并集并记下是谁标的，类型保留各家原值 */
 function merge(a: IpInfo, b: IpInfo): IpInfo {
   const ra = a.risk as IpRisk;
   const rb = b.risk as IpRisk;
@@ -208,6 +214,7 @@ function merge(a: IpInfo, b: IpInfo): IpInfo {
   return {
     ip: a.ip,
     sources: [...a.sources, ...b.sources],
+    registration: null,
     countryCode: a.countryCode ?? b.countryCode,
     region: a.region ?? b.region,
     city: a.city ?? b.city,
@@ -228,17 +235,75 @@ function merge(a: IpInfo, b: IpInfo): IpInfo {
       vpnService: ra.vpnService ?? rb.vpnService,
       abuserScore: ra.abuserScore,
       flaggedBy,
+      typeBy: { ...ra.typeBy, ...rb.typeBy },
     },
   };
 }
 
+interface RdapNetwork {
+  name?: string;
+  country?: string;
+  entities?: Array<{ roles?: string[]; vcardArray?: [string, Array<[string, { label?: string }, ...unknown[]]>] }>;
+}
+
+const RIR_BY_HOST: Array<[string, string]> = [
+  ['arin', 'ARIN'],
+  ['ripe', 'RIPE NCC'],
+  ['apnic', 'APNIC'],
+  ['lacnic', 'LACNIC'],
+  ['registro.br', 'LACNIC'],
+  ['afrinic', 'AFRINIC'],
+];
+
+let countryCodeByName: Map<string, string> | undefined;
+
+/** 英文国家名 → 两位代码（ARIN 只在地址里写国家全名） */
+function codeOfCountryName(name: string): string | null {
+  if (!countryCodeByName) {
+    countryCodeByName = new Map();
+    const names = new Intl.DisplayNames(['en'], { type: 'region' });
+    for (let a = 65; a <= 90; a++) {
+      for (let b = 65; b <= 90; b++) {
+        const code = String.fromCharCode(a, b);
+        try {
+          const n = names.of(code);
+          if (n && n !== code) countryCodeByName.set(n.toLowerCase(), code);
+        } catch {
+          /* 非法代码跳过 */
+        }
+      }
+    }
+  }
+  return countryCodeByName.get(name.trim().toLowerCase()) ?? null;
+}
+
+/** 从 ARIN 入口查 RDAP：非 ARIN 地址会被重定向到 RIPE / APNIC / LACNIC / AFRINIC */
+async function fromRdap(ip: string): Promise<IpRegistration | null> {
+  const res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
+    headers: { accept: 'application/rdap+json' },
+    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+  });
+  if (!res.ok) return null;
+  const d = await res.json<RdapNetwork>();
+  const host = new URL(res.url).hostname;
+  // RIPE / APNIC / LACNIC 在网段上直接给国家；ARIN 不给，取注册人地址的最后一行
+  const adr = d.entities?.find((e) => e.roles?.includes('registrant'))?.vcardArray?.[1]?.find((x) => x[0] === 'adr');
+  const lastLine = adr?.[1]?.label?.split('\n').at(-1);
+  return {
+    country: d.country?.toUpperCase() ?? (lastLine ? codeOfCountryName(lastLine) : null),
+    rir: RIR_BY_HOST.find(([k]) => host.includes(k))?.[1] ?? null,
+    netname: d.name ?? null,
+  };
+}
+
 export async function lookupIp(ip: string, secrets: Secrets): Promise<IpInfo | null> {
-  const [a, b] = await Promise.all([
+  const [a, b, registration] = await Promise.all([
     secrets.IPAPI_KEY ? fromIpapi(ip, secrets.IPAPI_KEY).catch(() => null) : null,
     fromProxycheck(ip, secrets.PROXYCHECK_KEY).catch(() => null),
+    fromRdap(ip).catch(() => null),
   ]);
-  if (a && b) return merge(a, b);
-  return a ?? b ?? fromIpinfo(ip, secrets.IPINFO_TOKEN).catch(() => null);
+  const info = a && b ? merge(a, b) : (a ?? b ?? (await fromIpinfo(ip, secrets.IPINFO_TOKEN).catch(() => null)));
+  return info && { ...info, registration };
 }
 
 export async function hashIp(ip: string, salt: string): Promise<string> {

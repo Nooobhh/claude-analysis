@@ -16,6 +16,7 @@
 - [x] 风险数据源：接入 proxycheck.io（VPN / 代理 / Tor / 机房 / 风险分）
 - [x] 界面：问题清单 + 出口一览表 + 彩色结论标签 + 国旗（DESIGN.md 同步）
 - [x] 仓库公开：github.com/Nooobhh/claude-analysis
+- [x] 原生 IP（RDAP 登记国家）+ 多数据源分歧并排显示
 - [x] 配置 `PROXYCHECK_KEY`（线上 Workers 共享出口的匿名额度已被占满）
 
 ## Backlog
@@ -23,6 +24,7 @@
 - P1 GitHub Actions 自动部署 + 页脚 commit hash：让人核对线上跑的就是仓库代码（需在仓库配 CF API token）
 - P2 看板：按维度展示封禁占比 + 置信区间，n≥30 才出结论；检测页显示「本站反馈」
 - P2 教程：检测项链到对应修复教程
+- P3 ASN 人机流量：接 Cloudflare Radar（需 Radar API token），显示出口 ASN 的人类 / 机器流量占比
 - P3 评分：用数据站封号数据校准权重后再出分
 - P3 Claude Code 终端自检：一条 curl 命令查 TZ / LANG / 代理变量
 - P3 购买独立域名（不含 claude），面向国内引流

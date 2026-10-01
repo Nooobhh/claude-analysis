@@ -5,7 +5,7 @@ import { hashIp, isPublicIp, lookupIp, type Secrets } from './ip';
 
 const IP_CACHE_TTL = 86400;
 // 数据源或返回结构变化时递增，旧缓存自然过期
-const IP_CACHE_VERSION = 3;
+const IP_CACHE_VERSION = 4;
 
 function reply(body: unknown, status = 200, cacheControl = 'no-store'): Response {
   return Response.json(body, { status, headers: { 'cache-control': cacheControl } });
