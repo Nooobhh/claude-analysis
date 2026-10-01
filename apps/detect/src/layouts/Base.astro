@@ -2,6 +2,7 @@
 import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import '../styles/global.css';
+import { COMMIT, DIRTY, VERSION } from '../lib/build-info';
 
 const REPO_URL = 'https://github.com/Nooobhh/claude-analysis';
 
@@ -52,6 +53,20 @@ const { title, description, current } = Astro.props;
         <span>开源 · AGPL-3.0</span>
         <a href={REPO_URL} rel="noopener">GitHub</a>
         <a href="/privacy">隐私说明</a>
+        <span class="build">
+          v{VERSION}
+          {
+            COMMIT && (
+              <>
+                {' · '}
+                <a href={`${REPO_URL}/commit/${COMMIT}`} rel="noopener" title="当前线上运行的代码对应的提交">
+                  {COMMIT.slice(0, 7)}
+                </a>
+                {DIRTY && '（含未提交改动）'}
+              </>
+            )
+          }
+        </span>
       </div>
     </footer>
   </body>

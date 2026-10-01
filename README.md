@@ -36,8 +36,19 @@ pnpm dev          # 检测站前端 http://localhost:4321（/api 代理到 :8787
 pnpm dev:worker   # 构建后用 wrangler dev 跑 Worker + 静态资源 http://localhost:8787
 pnpm build        # 构建检测站到 apps/detect/dist
 pnpm typecheck    # 生成 Worker 类型，检查 Worker 与前端类型
-pnpm run deploy   # 构建并部署到 Cloudflare Workers（需先 wrangler login；不能省略 run）
+pnpm run deploy   # 本地手动部署，仅应急用（需先 wrangler login；不能省略 run）
 ```
+
+## 部署
+
+推送到 `main` 后由 GitHub Actions（`.github/workflows/deploy.yml`）自动做类型检查并部署到 Cloudflare Workers。页脚显示的 commit 就是线上正在运行的代码，可以点开核对。
+
+仓库需要配置：
+
+- Secret `CLOUDFLARE_API_TOKEN`：在 Cloudflare 用「Edit Cloudflare Workers」模板创建
+- Secret `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID（放 Secret 是为了在公开的 Actions 日志里被屏蔽）
+
+Worker 运行时用到的 secret（见下方「配置」）存在 Cloudflare 上，部署不会覆盖。
 
 ## 配置
 

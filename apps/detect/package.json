@@ -19,6 +19,7 @@
     "flag-icons": "^7.5.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.4",
     "wrangler": "^4.144.0"
   }
 }

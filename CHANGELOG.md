@@ -6,6 +6,8 @@
 
 ## [Unreleased]
 ### Added
+- 页脚显示当前线上的版本号与 commit，点开即是 GitHub 上对应的源码，可核对线上运行的就是仓库代码
+- 推送到 main 后由 GitHub Actions 自动检查并部署，不再靠本地手动发布
 ### Changed
 ### Fixed
 ### Removed

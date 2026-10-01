@@ -20,6 +20,8 @@
 - 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）
 - 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + Worker 与前端 tsc）、`pnpm run deploy`（构建 + 部署）
 - `pnpm deploy` 是 pnpm 内置命令，部署必须写 `pnpm run deploy`
+- 正常发布 = push main，由 `.github/workflows/deploy.yml` 部署；本地 `pnpm run deploy` 仅应急（页脚会标「含未提交改动」）
+- 页脚版本 / commit 在构建时由 `src/lib/build-info.ts` 读 package.json 与 git
 - Worker 入口 `apps/detect/worker/index.ts`，只接 `/api/*`；配置 `apps/detect/wrangler.jsonc`
 - 检测项：ID 在 shared `CHECK_IDS`，文案在 `src/lib/catalog.ts`，判定在 `src/lib/checks/*`，调度在 `src/scripts/detect.ts`
 - Worker secret：`IP_HASH_SALT`、`PROXYCHECK_KEY`、`IPAPI_KEY`（线上均已配置）；可选 `IPINFO_TOKEN`；本地放 `.dev.vars`

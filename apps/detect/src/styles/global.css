@@ -220,6 +220,11 @@ code {
   color: var(--fg-muted);
 }
 
+.site-footer .build {
+  margin-left: auto;
+  font-family: var(--font-mono);
+}
+
 /* ---------- Page ---------- */
 
 .hero {
