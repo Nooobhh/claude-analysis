@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 ### Added
+### Changed
+### Fixed
+### Removed
+
+## [0.2.0] - 2026-10-01 — 检测站首版上线
+### Added
 - 开源仓库骨架：AGPL-3.0 协议，检测站可在本地构建、预览并部署到 Cloudflare Workers
 - 检测站首版上线 claude-analysis.ohaze.workers.dev：出口 IP、IP 属性与风险、环境指纹、交叉比对、WebRTC / DNS 泄露、延迟与服务状态
 - Anthropic 8 个域名出口一致性与 IP 漂移检测，能发现分流规则漏掉 Claude Code 域名、轮询节点来回切 IP
@@ -17,9 +23,6 @@
 - IP 风险拆成 VPN / 代理 / Tor / 滥用记录 / 风险分五项，同时查询 proxycheck.io 与 ipapi.is；两家结论不同时并排显示、标「存在分歧」
 - 新增「原生 IP」：比对 IP 段在注册机构（RDAP）的登记国家与实际定位，不一致标为广播 IP
 - WebRTC 暴露的 IP 在本地比对大陆 IP 段，泄露国内 IP 时标红「泄露国内 IP」，这个 IP 不会发往任何服务器
-### Changed
-### Fixed
-### Removed
 
 ## [0.1.0] - 2026-09-30 — initial
 ### Added
