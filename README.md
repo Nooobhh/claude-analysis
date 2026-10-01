@@ -8,7 +8,7 @@
 两个站，一个仓库：
 
 - **检测站**：在浏览器里检测你访问 Claude 时的网络环境——Claude 各域名的出口 IP 是否一致、IP 是否漂移、IP 属性与风险标记、系统时区 / 语言 / 字体等环境指纹、WebRTC 与 DNS 泄露、服务可用性。
-- **数据站**（规划中）：匿名问卷收集使用环境与封号结果，检测结果可一键带入；看板按网络 / 环境维度展示样本中的封禁占比，并提供教程。
+- **问卷站**（开发中）：匿名问卷收集使用环境与封号结果，检测结果复制「结果码」即可带入；之后加看板，按网络 / 环境维度展示样本中的封禁占比，并提供教程。
 
 ## 为什么
 
@@ -20,9 +20,9 @@
 检测站（Cloudflare Workers，不存数据）
   浏览器本地：各出口 IP、指纹、WebRTC、DNS 泄露
   Worker：/api/ip（查 IP 属性）、/api/status（服务状态中转）
-        │ 签名 token（不含原始 IP）
+        │ 结果码（签名，不含原始 IP；用户复制粘贴）
         ▼
-数据站（服务器，唯一存数据的地方）
+问卷站（Cloudflare Workers，另一个域名，唯一存数据的地方）
   问卷 / 看板 / 教程 / 公开聚合数据
 ```
 
@@ -34,8 +34,9 @@
 pnpm install
 pnpm dev          # 检测站前端 http://localhost:4321（/api 代理到 :8787）
 pnpm dev:worker   # 构建后用 wrangler dev 跑 Worker + 静态资源 http://localhost:8787
+pnpm dev:data     # 问卷站 http://localhost:4322
 pnpm build        # 构建检测站到 apps/detect/dist
-pnpm typecheck    # 生成 Worker 类型，检查 Worker 与前端类型
+pnpm typecheck    # 生成 Worker 类型，检查两站与 Worker 的类型
 pnpm run deploy   # 本地手动部署，仅应急用（需先 wrangler login；不能省略 run）
 ```
 

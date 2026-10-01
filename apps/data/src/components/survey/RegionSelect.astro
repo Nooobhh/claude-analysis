@@ -1,0 +1,28 @@
+---
+// 国家 / 地区下拉：常用在前，全部按中文名排序；值为 ISO 3166-1 alpha-2
+import { COUNTRY_CODES, PINNED_COUNTRIES, countryName } from '../../lib/countries';
+
+interface Props {
+  name: string;
+  label: string;
+  /** 加一个「不清楚」选项（值 unknown） */
+  unknown?: boolean;
+}
+
+const { name, label, unknown } = Astro.props;
+
+const all = COUNTRY_CODES.map((cc) => [cc, countryName(cc)] as const).sort((a, b) => a[1].localeCompare(b[1], 'zh-CN'));
+---
+
+<span class="select">
+  <select name={name} aria-label={label}>
+    <option value="">选择国家或地区</option>
+    {unknown && <option value="unknown">不清楚</option>}
+    <optgroup label="常用">
+      {PINNED_COUNTRIES.map((cc) => <option value={cc}>{countryName(cc)}</option>)}
+    </optgroup>
+    <optgroup label="全部">
+      {all.map(([cc, n]) => <option value={cc}>{n}</option>)}
+    </optgroup>
+  </select>
+</span>

@@ -1,0 +1,52 @@
+---
+// 年月下拉，可选加「日（选填）」或「不清楚」；字段名为 <id>.year / <id>.month / <id>.day / <id>.unknown
+interface Props {
+  id: string;
+  day?: boolean;
+  unknown?: boolean;
+}
+
+const { id, day, unknown } = Astro.props;
+
+/** claude.ai 2023 年开放注册 */
+const FIRST_YEAR = 2023;
+const years = Array.from({ length: new Date().getFullYear() - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i).reverse();
+const pad = (n: number) => String(n).padStart(2, '0');
+const range = (n: number) => Array.from({ length: n }, (_, i) => i + 1);
+---
+
+<div class="date">
+  <span class="select">
+    <select name={`${id}.year`} aria-label="年">
+      <option value="">年</option>
+      {years.map((y) => <option value={y}>{y}</option>)}
+    </select>
+  </span>
+  <span class="select">
+    <select name={`${id}.month`} aria-label="月">
+      <option value="">月</option>
+      {range(12).map((m) => <option value={pad(m)}>{m} 月</option>)}
+    </select>
+  </span>
+  {
+    day && (
+      <span class="select">
+        <select name={`${id}.day`} aria-label="日（选填）">
+          <option value="">日（选填）</option>
+          {range(31).map((d) => (
+            <option value={pad(d)}>{d} 日</option>
+          ))}
+        </select>
+      </span>
+    )
+  }
+  {
+    unknown && (
+      <label class="opt">
+        <input type="checkbox" name={`${id}.unknown`} />
+        <span class="opt__box" aria-hidden="true" />
+        不清楚
+      </label>
+    )
+  }
+</div>

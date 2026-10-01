@@ -16,13 +16,16 @@
 - 当前阶段不做总分 / 加权评分，单项只按客观规则标「正常 / 注意 / 异常」；评分等数据站样本足够后校准
 
 ## 关键文件 / 命令
-- 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），两站共用类型 `packages/shared`
-- 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）
+- 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），问卷站 `apps/data`（Astro 7）
+- 两站共用的类型与样式 token 在 `packages/shared`（样式 `styles/global.css`）；两站互不导入对方代码
+- 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）、`pnpm dev:data`（问卷站 :4322）
 - 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + astro sync + 两套 tsc）、`pnpm run deploy`（构建 + 部署）
 - `pnpm deploy` 是 pnpm 内置命令，部署必须写 `pnpm run deploy`
 - 正常发布 = push main，由 `.github/workflows/deploy.yml` 部署；本地 `pnpm run deploy` 仅应急（页脚会标「含未提交改动」）
-- 页脚版本 / commit 在构建时由 `src/lib/build-info.ts` 读 package.json 与 git
+- 页脚版本 / commit 在构建时由 `src/lib/build-info.ts`（两站各一份）读 package.json 与 git
 - Worker 入口 `apps/detect/worker/index.ts`，只接 `/api/*`；配置 `apps/detect/wrangler.jsonc`
+- 问卷：设计 `docs/specs/survey.md`；字段在 shared `survey.ts`，检测快照在 `snapshot.ts`，改题先改 spec
+- 问卷页是 5 步向导，显示条件写在 `apps/data/src/scripts/survey.ts` 的 `update()`，须与 spec 各题条件一致
 - 检测项：ID 在 shared `CHECK_IDS`，文案在 `src/lib/catalog.ts`，判定在 `src/lib/checks/*`，调度在 `src/scripts/detect.ts`
 - Worker secret：`IP_HASH_SALT`、`PROXYCHECK_KEY`、`IPAPI_KEY`（线上均已配置）；可选 `IPINFO_TOKEN`；本地放 `.dev.vars`
 - IP 数据源或 `IpInfo` 结构变了，递增 `worker/index.ts` 的 `IP_CACHE_VERSION`，否则 24h 内读到旧缓存
@@ -39,7 +42,8 @@
 ## 集成点
 - 检测站：Cloudflare Workers（静态资源 + Worker API + KV 缓存），线上 `claude-analysis.ohaze.workers.dev`
 - 仓库：`github.com/Nooobhh/claude-analysis`（公开）；页脚链接写在 `src/layouts/Base.astro` 的 `REPO_URL`
-- 数据站（后续）：tokyo 服务器，Caddy 反代；接收检测站签名 token，不接收原始 IP
+- 问卷站（数据站）：Cloudflare Workers，另用一个 workers.dev 域名（未部署）；两站独立部署，以后可能迁服务器
+- 检测结果由用户复制「结果码」粘贴进问卷，两站之间不直接传数据；问卷站不接收原始 IP
 - 浏览器直连：Anthropic 8 域名 trace、ipip.net / 又拍云（国内 IP）、Cloudflare / Google STUN、Fastly / Surfshark / ipleak（DNS）
 - Worker 访问：proxycheck.io + ipapi.is 并行（记 `flaggedBy` / `typeBy`，分歧前端并排显示），ipinfo.io 兜底；status.claude.com
 - 原生 IP：Worker 从 RIPE 的 RDAP 入口查（各 RIR 互相跳转）；落到 ARIN 时常 525，改走 whois.arin.net:43

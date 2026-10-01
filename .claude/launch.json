@@ -12,6 +12,12 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["dev:worker"],
       "port": 8787
+    },
+    {
+      "name": "data",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["dev:data"],
+      "port": 4322
     }
   ]
 }

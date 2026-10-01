@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "pnpm --filter @claude-analysis/detect dev",
     "dev:worker": "pnpm --filter @claude-analysis/detect dev:worker",
+    "dev:data": "pnpm --filter @claude-analysis/data dev",
     "build": "pnpm --filter @claude-analysis/detect build",
     "typecheck": "pnpm -r typecheck",
     "deploy": "pnpm --filter @claude-analysis/detect run deploy"

@@ -2,10 +2,15 @@
 > 项目 overview（现在 + 未来）。已发布历史看 CHANGELOG.md，agent 指令看 CLAUDE.md。
 
 ## 当前主线
-0.4.0 — 待定（从 Backlog 置顶项选定后填写）
+0.4.0 — 问卷站首版：匿名问卷收集封号数据，检测结果一键带入（问卷设计见 [docs/specs/survey.md](./docs/specs/survey.md)）
+
+- [ ] 检测站生成签名检测结果码，加「复制结果码」按钮
+- [ ] 问卷站部署到 Cloudflare Workers（另一个 workers.dev 域名）+ 选存储
+- [ ] 问卷页：5 步向导、检测 / 手动两条环境路径、提交校验
+- [ ] 匿名管理链接：修改 / 删除，状态变化记事件
+- [ ] 问卷站隐私页
 
 ## Backlog
-- P1 数据站首版：问卷 + 检测结果签名 token 一键带入 + 匿名管理链接（可更新 / 删除）
 - P2 看板：按维度展示封禁占比 + 置信区间，n≥30 才出结论；检测页显示「本站反馈」
 - P2 教程：检测项链到对应修复教程
 - P3 ASN 人机流量：接 Cloudflare Radar（需 Radar API token），显示出口 ASN 的人类 / 机器流量占比

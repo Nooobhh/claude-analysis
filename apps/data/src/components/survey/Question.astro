@@ -1,0 +1,49 @@
+---
+// 一道题：传 options 渲染单选 / 多选按钮，否则用 slot 放下拉、输入框或追问
+interface Props {
+  /** 字段名：脚本按 data-q 找题，选项 input 的 name 也用它 */
+  id: string;
+  /** 题号（对应 docs/specs/survey.md），追问可省略 */
+  num?: string;
+  label: string;
+  hint?: string;
+  options?: Record<string, string>;
+  multi?: boolean;
+  optional?: boolean;
+  /** 多选里与其他选项互斥的值 */
+  exclusive?: string[];
+  hidden?: boolean;
+}
+
+const { id, num, label, hint, options, multi, optional, exclusive = [], hidden } = Astro.props;
+---
+
+<fieldset class="q" data-q={id} data-label={label} data-optional={optional ? '' : undefined} hidden={hidden}>
+  <legend class="q__label">
+    {num && <span class="q__num">{num}</span>}
+    {label}
+    {multi && <span class="q__meta">多选</span>}
+    {optional && <span class="q__meta">选填</span>}
+    {hint && <span class="q__hint">{hint}</span>}
+  </legend>
+  {
+    options && (
+      <div class="opts">
+        {Object.entries(options).map(([value, text]) => (
+          <label class="opt">
+            <input
+              type={multi ? 'checkbox' : 'radio'}
+              name={id}
+              value={value}
+              data-exclusive={exclusive.includes(value) ? '' : undefined}
+            />
+            <span class="opt__box" aria-hidden="true" />
+            {text}
+          </label>
+        ))}
+      </div>
+    )
+  }
+  <slot />
+  <p class="q__error" hidden></p>
+</fieldset>

@@ -3,16 +3,16 @@ import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import '@claude-analysis/shared/global.css';
 import { COMMIT, DIRTY, VERSION } from '../lib/build-info';
+import { DETECT_URL } from '../lib/sites';
 
 const REPO_URL = 'https://github.com/Nooobhh/claude-analysis';
 
 interface Props {
   title: string;
   description: string;
-  current?: 'home' | 'privacy';
 }
 
-const { title, description, current } = Astro.props;
+const { title, description } = Astro.props;
 ---
 
 <!doctype html>
@@ -30,7 +30,7 @@ const { title, description, current } = Astro.props;
   <body>
     <header class="site-header">
       <div class="container">
-        <a class="brand" href="/" aria-label="claude-analysis 首页">
+        <a class="brand" href="/" aria-label="claude-analysis 问卷首页">
           <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
             <rect x="0.5" y="0.5" width="19" height="19" rx="5" stroke="currentColor"></rect>
             <circle cx="10" cy="10" r="3" fill="currentColor"></circle>
@@ -38,8 +38,8 @@ const { title, description, current } = Astro.props;
           claude-analysis
         </a>
         <nav class="nav">
-          <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>隐私</a>
-          <slot name="header-actions" />
+          <!-- 新标签页打开，避免离开问卷丢掉已填的答案 -->
+          <a href={DETECT_URL} target="_blank" rel="noopener">环境检测</a>
         </nav>
       </div>
     </header>
@@ -52,7 +52,6 @@ const { title, description, current } = Astro.props;
       <div class="container">
         <span>开源 · AGPL-3.0</span>
         <a href={REPO_URL} rel="noopener">GitHub</a>
-        <a href="/privacy">隐私说明</a>
         <span class="build">
           v{VERSION}
           {
