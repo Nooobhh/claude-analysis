@@ -277,16 +277,19 @@ function codeOfCountryName(name: string): string | null {
   return countryCodeByName.get(name.trim().toLowerCase()) ?? null;
 }
 
-const RDAP_ATTEMPTS = 3;
-
 /**
- * 从 ARIN 入口查 RDAP：非 ARIN 地址会被重定向到 RIPE / APNIC / LACNIC / AFRINIC。
- * Workers 访问 ARIN 偶发 525（2026-10-01 实测约两三成），失败重试
+ * RDAP 入口：任一注册机构都会把不归自己管的地址重定向到正确的机构。
+ * Workers 访问 ARIN 常见成串的 525（2026-10-01 实测三到五成），所以先走 RIPE，
+ * 只有 ARIN 自己的地址才落到 ARIN；失败时两个入口交替重试并逐次加大间隔
  */
+const RDAP_ENTRIES = ['https://rdap.db.ripe.net/ip/', 'https://rdap.arin.net/registry/ip/'];
+const RDAP_ATTEMPTS = 4;
+
 async function fromRdap(ip: string): Promise<IpRegistration | null> {
   let res: Response | null = null;
   for (let i = 0; i < RDAP_ATTEMPTS && !res?.ok; i++) {
-    res = await fetch(`https://rdap.arin.net/registry/ip/${encodeURIComponent(ip)}`, {
+    if (i) await new Promise((r) => setTimeout(r, 300 * i));
+    res = await fetch(`${RDAP_ENTRIES[i % RDAP_ENTRIES.length]}${encodeURIComponent(ip)}`, {
       headers: { accept: 'application/rdap+json' },
       signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
     }).catch(() => null);
