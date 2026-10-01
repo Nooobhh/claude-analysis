@@ -18,7 +18,7 @@
 ## 关键文件 / 命令
 - 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），两站共用类型 `packages/shared`
 - 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）
-- 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + Worker 与前端 tsc）、`pnpm run deploy`（构建 + 部署）
+- 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + astro sync + 两套 tsc）、`pnpm run deploy`（构建 + 部署）
 - `pnpm deploy` 是 pnpm 内置命令，部署必须写 `pnpm run deploy`
 - 正常发布 = push main，由 `.github/workflows/deploy.yml` 部署；本地 `pnpm run deploy` 仅应急（页脚会标「含未提交改动」）
 - 页脚版本 / commit 在构建时由 `src/lib/build-info.ts` 读 package.json 与 git

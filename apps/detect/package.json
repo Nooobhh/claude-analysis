@@ -6,7 +6,7 @@
     "dev": "astro dev",
     "dev:worker": "astro build && wrangler dev",
     "build": "astro build",
-    "typecheck": "wrangler types && tsc --noEmit -p worker && tsc --noEmit",
+    "typecheck": "wrangler types && astro sync && tsc --noEmit -p worker && tsc --noEmit",
     "cf-typegen": "wrangler types",
     "deploy": "astro build && wrangler deploy",
     "gen:cn-ipv4": "node scripts/gen-cn-ipv4.mjs"
