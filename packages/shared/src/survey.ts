@@ -156,7 +156,8 @@ export type EnvBanHistory = keyof typeof ENV_BAN_HISTORY;
 export const EXIT_TYPE = {
   airport: '机场（订阅制代理，多人共用节点）',
   vps: '自建 VPS（自己租服务器搭）',
-  residential: '静态住宅 IP（单独购买的家宽 IP）',
+  /** 只看是否独享、固定；是家宽还是机房 IP 用户判断不准，交给检测数据 */
+  static: '静态 IP（单独购买、自己独享的固定 IP，机场或 IP 服务商出售的都算）',
   vpn: '商业 VPN（ExpressVPN、NordVPN 等独立 App）',
   mobile_roaming: '境外手机卡流量（漫游或 eSIM）',
   abroad: '人在海外，不用代理',
