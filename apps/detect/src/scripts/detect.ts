@@ -4,6 +4,9 @@ import {
   RESULT_CODE_TTL,
   STATUS_LABEL,
   composeResultCode,
+  judgeFingerprint,
+  judgeNetwork,
+  type EnvVerdict,
   type CheckId,
   type LocalSnapshot,
   type Status,
@@ -188,6 +191,35 @@ function renderIssues(finished: boolean) {
   );
 }
 
+/** 环境结论：网络环境、设备指纹通过与否 + 扣分明细（规则在 shared scoring.ts，与问卷站看板共用）；不显示分数 */
+function verdicts(): Array<[kind: 'network' | 'fingerprint', name: string, v: EnvVerdict]> {
+  const status = Object.fromEntries([...results].flatMap(([id, r]) => (r.status ? [[id, r.status]] : [])));
+  return [
+    ['network', '网络环境', judgeNetwork(status)],
+    ['fingerprint', '设备指纹', judgeFingerprint(status)],
+  ];
+}
+
+const labelOf = new Map(CHECKS.map((c) => [c.id, c.label]));
+
+function verdictText(v: EnvVerdict): string {
+  if (v.unknown) return '检测失败，无法判断';
+  if (v.fatal.length) {
+    return `有异常：${v.fatal.map((id) => `${groupOf.get(id)} · ${labelOf.get(id)}${results.get(id)?.tag ? `（${results.get(id)!.tag}）` : ''}`).join('、')}`;
+  }
+  return v.deductions.length ? v.deductions.map((d) => `${d.label} −${d.points}`).join(' · ') : '没有扣分项';
+}
+
+function renderVerdicts(finished: boolean) {
+  $('#verdicts')!.hidden = !finished;
+  if (!finished) return;
+  for (const [kind, , v] of verdicts()) {
+    const row = $(`.verdict[data-kind="${kind}"]`)!;
+    setTag(row.querySelector<HTMLElement>('.tag')!, v.unknown ? 'unknown' : v.pass ? 'ok' : 'bad', v.unknown ? '无法判断' : v.pass ? '通过' : '不通过');
+    row.querySelector('.verdict__detail')!.textContent = verdictText(v);
+  }
+}
+
 function renderSummary() {
   const c = counts();
   for (const status of ['bad', 'warn', 'ok', 'unknown'] as const) {
@@ -206,7 +238,11 @@ function renderSummary() {
   const label = $('#progress-label')!;
   label.textContent = finished ? '检测完成' : `检测中 ${done}/${total}`;
   renderIssues(finished);
-  if (finished) $('#announce')!.textContent = `检测完成：异常 ${c.bad} 项，注意 ${c.warn} 项`;
+  renderVerdicts(finished);
+  if (finished) {
+    const env = verdicts().map(([, name, v]) => `${name}${v.unknown ? '无法判断' : v.pass ? '通过' : '不通过'}`).join('，');
+    $('#announce')!.textContent = `检测完成：异常 ${c.bad} 项，注意 ${c.warn} 项；${env}`;
+  }
 }
 
 // ---------- 检测调度 ----------
@@ -320,6 +356,7 @@ function buildReport(): string {
     'Claude 使用环境检测报告（IP 已打码）',
     new Date().toLocaleString('zh-CN', { hour12: false }),
     `异常 ${c.bad} · 注意 ${c.warn} · 正常 ${c.ok}${c.unknown ? ` · 未知 ${c.unknown}` : ''}`,
+    ...verdicts().map(([, name, v]) => `${name}：${v.unknown ? '无法判断' : v.pass ? '通过' : '不通过'}（${verdictText(v)}）`),
   ];
   for (const group of REPORT_GROUPS) {
     lines.push('', `【${group.title}】`);

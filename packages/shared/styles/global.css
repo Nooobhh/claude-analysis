@@ -399,6 +399,59 @@ code {
   font-size: 12px;
 }
 
+/* 环境结论：网络环境、设备指纹通过与否 + 扣分明细（DESIGN.md §4.1） */
+.verdicts {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.verdict {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 0;
+}
+
+.verdict__name {
+  font-weight: 500;
+}
+
+.verdict .tag {
+  justify-self: start;
+}
+
+.verdict__detail {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .verdict {
+    grid-template-columns: auto auto;
+    justify-content: start;
+  }
+
+  .verdict__detail {
+    grid-column: 1 / -1;
+  }
+}
+
+.verdict__rules {
+  margin-top: 8px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.verdict__rules summary {
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.verdict__rules p {
+  margin-top: 6px;
+}
+
 .issues {
   padding: 16px 20px 20px;
   border-top: 1px solid var(--border);

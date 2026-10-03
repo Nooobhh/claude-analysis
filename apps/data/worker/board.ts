@@ -1,5 +1,6 @@
 // 看板汇总：把每份问卷判成「环境干净 / 有问题 / 无法判定」「行为干净 / 有违规项 / 无法判定」，再按维度数份数。
-// 规则与 docs/specs/board.md「环境判定」「行为判定」一致，改规则先改 spec；只在服务器上跑，下发的只有份数
+// 规则与 docs/specs/board.md「环境判定」「行为判定」一致，改规则先改 spec；网络环境、设备指纹的扣分规则在 shared scoring.ts，
+// 与检测站结论卡共用。只在服务器上跑，下发的只有份数
 import {
   ACCOUNT_SOURCE,
   ACCOUNTS_IN_ENV,
@@ -7,26 +8,28 @@ import {
   BAN_REASON,
   CARD_KIND,
   CLIENT,
-  CN_CLIENT,
   DISTILL,
   ENV_BAN_HISTORY,
+  ENV_PASS_SCORE,
   JAILBREAK,
   LOGIN_METHOD,
-  NODE_SWITCH,
+  PAYMENT_METHOD,
   PHONE_VERIFY,
   PLAN,
   REVERSE_PROXY,
   SENSITIVE_USE,
   SHARING,
   SUPPORTED_COUNTRIES,
-  SYSTEM_LANGUAGE,
-  TIMEZONE_SETTING,
   USAGE_CAP,
+  judgeFingerprint,
+  judgeNetwork,
   type AccountStatus,
   type CardInfo,
   type CheckId,
   type DetectSnapshot,
+  type EnvVerdict,
   type ManagedSubmission,
+  type ManualEnv,
   type Status,
   type SurveyAnswers,
 } from '@claude-analysis/shared';
@@ -42,49 +45,34 @@ type Tri = 'clean' | 'problem' | 'unknown';
 
 /** 任一项有问题即有问题；否则任一项无法判定即无法判定 */
 const combine = (parts: Tri[]): Tri => (parts.includes('problem') ? 'problem' : parts.includes('unknown') ? 'unknown' : 'clean');
-
-/** 网络类：没有「异常」即可 */
-const NETWORK_CHECKS: CheckId[] = [
-  'exit.proxied',
-  'exit.consistency',
-  'exit.drift',
-  'ip.region',
-  'ip.native',
-  'ip.type',
-  'ip.vpn',
-  'ip.proxy',
-  'ip.tor',
-  'ip.abuser',
-  'ip.score',
-  'leak.webrtc',
-  'leak.dns',
-];
-/** 设备指纹类：要求全部「正常」（这类最多判到「注意」） */
-const FP_CHECKS: CheckId[] = ['fp.timezone', 'fp.language', 'fp.locale', 'fp.fonts', 'fp.browser', 'fp.device', 'cross.timezone', 'cross.language'];
+const triOf = (v: EnvVerdict): Tri => (v.unknown ? 'unknown' : v.pass ? 'clean' : 'problem');
 
 /** 数据清洗「检测设备不是使用设备」：检测时的系统不在 E2 里，设备指纹不代表实际用 Claude 的设备 */
 const fpUsable = (s: Sub) => !s.snapshot || s.snapshot.local.fp.os === 'other' || s.answers.os.includes(s.snapshot.local.fp.os);
+const manual = (s: Sub): ManualEnv | null => (s.env.source === 'manual' ? s.env.answers : null);
 
-export function envOf(s: Sub): Tri {
-  const parts: Tri[] = [];
-  // 别的号被封过：这套环境可能已被关联；「不清楚」跳过
-  if (s.answers.envBanHistory === 'yes') parts.push('problem');
-  if (s.snapshot) {
-    // 「未知」的检测项跳过
-    const st = s.snapshot.local.status;
-    if (NETWORK_CHECKS.some((id) => st[id] === 'bad')) parts.push('problem');
-    if (!fpUsable(s)) parts.push('unknown');
-    else if (FP_CHECKS.some((id) => st[id] === 'warn' || st[id] === 'bad')) parts.push('problem');
-  } else if (s.env.source === 'manual') {
-    const m = s.env.answers;
-    parts.push(m.exitRegion === null ? 'unknown' : SUPPORTED_COUNTRIES.has(m.exitRegion) ? 'clean' : 'problem');
-    parts.push(m.timezone === 'match_exit' ? 'clean' : m.timezone === 'unknown' ? 'unknown' : 'problem');
-    parts.push(m.language === 'zh' ? 'problem' : 'clean');
-    parts.push(m.nodeSwitch === 'fixed' ? 'clean' : m.nodeSwitch === 'auto' ? 'problem' : 'unknown');
-    parts.push(m.cnClient === 'no' ? 'clean' : m.cnClient === 'yes' ? 'problem' : 'unknown');
-  }
-  return combine(parts);
+/** 网络环境：检测站样本按 scoring.ts；手动样本出口在不支持地区、节点会自动切换直接不通过，出口不清楚无法判定 */
+export function networkOf(s: Sub): Tri {
+  if (s.snapshot) return triOf(judgeNetwork(s.snapshot.local.status));
+  const m = manual(s);
+  if (!m) return 'unknown';
+  if ((m.exitRegion !== null && !SUPPORTED_COUNTRIES.has(m.exitRegion)) || m.nodeSwitch === 'auto') return 'problem';
+  return m.exitRegion === null ? 'unknown' : 'clean';
 }
+
+/** 手动样本的设备指纹扣分（与检测站对应项的权重折算，见 spec）；「不清楚」跳过 */
+const manualFpPoints = (m: ManualEnv) =>
+  (m.timezone === 'cn' ? 60 : m.timezone === 'other' ? 20 : 0) + (m.language === 'zh' ? 20 : 0) + (m.cnClient === 'yes' ? 30 : 0);
+
+export function fingerprintOf(s: Sub): Tri {
+  if (s.snapshot) return fpUsable(s) ? triOf(judgeFingerprint(s.snapshot.local.status)) : 'unknown';
+  const m = manual(s);
+  if (!m) return 'unknown';
+  return 100 - manualFpPoints(m) < ENV_PASS_SCORE ? 'problem' : 'clean';
+}
+
+/** 环境干净 = 网络环境、设备指纹都通过；账号环境、支付环境只展示，不进判定 */
+export const envOf = (s: Sub): Tri => combine([networkOf(s), fingerprintOf(s)]);
 
 /** 违规项：买号或拼车、多人共用、反代、破限、蒸馏；没问到的题（第 1 版没有 E8）跳过 */
 export function behaviorOf({ answers: a }: Sub): Tri {
@@ -118,23 +106,45 @@ interface DimDef {
 
 const one = (v: string | undefined | null) => (v ? [v] : null);
 
-/** 检测项按判定结果分组；设备指纹类遇到「检测设备不是使用设备」不计入 */
-function checkDim(title: string, ids: CheckId[], labels: Partial<Record<Status, string>>, fingerprint = false): DimDef {
-  const rank: Record<Status, number> = { unknown: 0, ok: 1, warn: 2, bad: 3 };
+const SEVERITY: Record<Status, number> = { unknown: 0, ok: 1, warn: 2, bad: 3 };
+/** 合成维度的三档 */
+const LEVEL = { ok: '正常', warn: '有注意项', bad: '有异常项' };
+
+/** 几个检测项合成一个维度，取最严重的一项；manual 给出手动样本对应的档位。设备指纹类遇到「检测设备不是使用设备」不计入 */
+function levelDim(
+  q: string,
+  title: string,
+  ids: CheckId[],
+  opts: { fingerprint?: boolean; manual?: (m: ManualEnv) => Status | null } = {},
+): DimDef {
   return {
-    q: '检测',
+    q,
     title,
-    labels: labels as Record<string, string>,
+    labels: LEVEL,
     pick: (s) => {
-      if (!s.snapshot || (fingerprint && !fpUsable(s))) return null;
-      // 几项合成一个维度时取最严重的；全是「未知」不计入
-      const worst = ids.map((id) => s.snapshot!.local.status[id]).reduce<Status | undefined>((a, b) => (b && (!a || rank[b] > rank[a]) ? b : a), undefined);
-      return worst && worst !== 'unknown' ? [worst] : null;
+      if (s.snapshot) {
+        if (opts.fingerprint && !fpUsable(s)) return null;
+        const worst = ids.map((id) => s.snapshot!.local.status[id]).reduce<Status | undefined>((a, b) => (b && (!a || SEVERITY[b] > SEVERITY[a]) ? b : a), undefined);
+        // 全是「未知」不计入
+        return worst && worst !== 'unknown' ? [worst] : null;
+      }
+      const m = manual(s);
+      return one(m && opts.manual ? opts.manual(m) : null);
     },
   };
 }
 
-const manual = (s: Sub) => (s.env.source === 'manual' ? s.env.answers : null);
+const PASS = { clean: '通过', problem: '不通过' };
+const verdictDim = (title: string, judge: (s: Sub) => Tri): DimDef => ({
+  q: '判定',
+  title,
+  labels: PASS,
+  pick: (s) => {
+    const v = judge(s);
+    return v === 'unknown' ? null : [v];
+  },
+});
+
 const cardOf = (s: Sub): CardInfo | null => {
   const p = s.answers.payment;
   if (p?.method === 'card') return p.card;
@@ -183,52 +193,56 @@ const BEHAVIOR: Array<{ title: string; desc: string; dims: DimDef[] }> = [
 
 const ENVIRONMENT: Array<{ title: string; desc?: string; dims: DimDef[] }> = [
   {
-    title: '网络',
-    desc: '代理情况两类样本都有；检测项只有检测站样本，M 开头的只有手动填写的样本',
+    title: '网络环境',
+    desc: `进环境判定：有异常项，或扣分后低于 ${ENV_PASS_SCORE} 分，算不通过`,
     dims: [
+      verdictDim('网络环境', networkOf),
       { q: 'D2', title: '代理情况', labels: EXIT_SHORT, pick: (s) => [s.env.exitType] },
-      checkDim('出口地区', ['ip.region'], { ok: '支持地区', bad: '不支持地区' }),
-      checkDim('IP 网络类型', ['ip.type'], { ok: '非机房（住宅、移动等）', warn: '机房，或数据源有分歧' }),
-      checkDim('原生 IP', ['ip.native'], { ok: '原生 IP', warn: '广播 IP' }),
-      checkDim('VPN / 代理标记', ['ip.vpn', 'ip.proxy'], { ok: '未标记', warn: '只有一家标记', bad: '都标记' }),
-      checkDim('风险分', ['ip.score'], { ok: '低风险', warn: '中风险', bad: '高风险' }),
-      checkDim('多域名出口', ['exit.consistency'], { ok: '一致', warn: '部分域名请求失败', bad: '出现多个出口' }),
-      checkDim('IP 漂移', ['exit.drift'], { ok: '没有漂移', bad: '几秒内 IP 变化' }),
-      checkDim('WebRTC', ['leak.webrtc'], { ok: '未泄露或已禁用', warn: 'UDP 出口与 Claude 不同', bad: '泄露大陆 IP' }),
-      checkDim('DNS 解析器', ['leak.dns'], { ok: '未发现国内解析器', warn: '有港澳解析器', bad: '有国内解析器' }),
-      {
-        q: 'M1',
-        title: '出口地区',
-        labels: { supported: '支持地区', unsupported: '不支持地区', unknown: '不清楚' },
-        pick: (s) => {
-          const m = manual(s);
-          if (!m) return null;
-          return [m.exitRegion === null ? 'unknown' : SUPPORTED_COUNTRIES.has(m.exitRegion) ? 'supported' : 'unsupported'];
-        },
-      },
-      { q: 'M5', title: '节点自动切换', labels: NODE_SWITCH, pick: (s) => one(manual(s)?.nodeSwitch) },
+      levelDim('检测 + M1 M5', '出口', ['exit.proxied', 'ip.region', 'exit.consistency', 'exit.drift'], {
+        manual: (m) =>
+          (m.exitRegion !== null && !SUPPORTED_COUNTRIES.has(m.exitRegion)) || m.nodeSwitch === 'auto'
+            ? 'bad'
+            : m.exitRegion === null && m.nodeSwitch === 'unknown'
+              ? null
+              : 'ok',
+      }),
+      levelDim('检测', 'IP 质量', ['ip.type', 'ip.native', 'ip.vpn', 'ip.proxy', 'ip.tor', 'ip.abuser', 'ip.score']),
+      levelDim('检测', '泄露', ['leak.webrtc', 'leak.dns']),
     ],
   },
   {
     title: '设备指纹',
-    desc: '检测设备不是使用设备的检测站样本不计入',
+    desc: `进环境判定：扣分后低于 ${ENV_PASS_SCORE} 分算不通过；检测设备不是使用设备的检测站样本不计入`,
     dims: [
-      checkDim('系统时区', ['fp.timezone'], { ok: '非中国 / 港澳时区', warn: '中国或港澳时区' }, true),
-      checkDim('浏览器语言', ['fp.language'], { ok: '不含简体中文', warn: '含简体中文或港澳中文' }, true),
-      checkDim('区域格式', ['fp.locale'], { ok: '非简体中文格式', warn: '简体中文或港澳格式' }, true),
-      checkDim('中文环境字体', ['fp.fonts'], { ok: '没有', warn: '有' }, true),
-      checkDim('国产浏览器或设备', ['fp.browser', 'fp.device'], { ok: '未检测到', warn: '检测到' }, true),
-      checkDim('时区与 IP', ['cross.timezone'], { ok: '一致', warn: '不一致' }, true),
-      { q: 'M3', title: '系统时区', labels: TIMEZONE_SETTING, pick: (s) => one(manual(s)?.timezone) },
-      { q: 'M4', title: '系统和浏览器语言', labels: SYSTEM_LANGUAGE, pick: (s) => one(manual(s)?.language) },
-      { q: 'M6', title: '国产手机或浏览器', labels: CN_CLIENT, pick: (s) => one(manual(s)?.cnClient) },
+      verdictDim('设备指纹', fingerprintOf),
+      levelDim('检测 + M3', '时区', ['fp.timezone', 'cross.timezone'], {
+        fingerprint: true,
+        manual: (m) => (m.timezone === 'match_exit' ? 'ok' : m.timezone === 'unknown' ? null : 'warn'),
+      }),
+      levelDim('检测 + M4', '语言与格式', ['fp.language', 'fp.locale', 'cross.language'], {
+        fingerprint: true,
+        manual: (m) => (m.language === 'zh' ? 'warn' : 'ok'),
+      }),
+      levelDim('检测 + M6', '中文软件痕迹', ['fp.fonts', 'fp.browser', 'fp.device'], {
+        fingerprint: true,
+        manual: (m) => (m.cnClient === 'yes' ? 'warn' : m.cnClient === 'no' ? 'ok' : null),
+      }),
     ],
   },
   {
-    title: '身份地区信号',
+    title: '账号环境',
+    desc: '只展示，不进判定',
     dims: [
-      { q: 'C4', title: '手机号验证', labels: PHONE_VERIFY, pick: (s) => [s.answers.phone] },
       { q: 'C2', title: '登录方式', labels: LOGIN_METHOD, pick: (s) => [s.answers.login] },
+      { q: 'C4', title: '手机号验证', labels: PHONE_VERIFY, pick: (s) => [s.answers.phone] },
+      { q: 'C9', title: '同环境别的号被封过', labels: ENV_BAN_HISTORY, pick: (s) => [s.answers.envBanHistory] },
+    ],
+  },
+  {
+    title: '支付环境',
+    desc: '只展示，不进判定',
+    dims: [
+      { q: 'C6', title: '付款方式', labels: { ...PAYMENT_METHOD, free: 'Free（没付款）' }, pick: (s) => [s.answers.payment?.method ?? 'free'] },
       { q: 'C6', title: '卡类型', labels: CARD_KIND, pick: (s) => one(cardOf(s)?.kind) },
       { q: 'C6', title: '发卡地区', labels: {}, country: true, pick: (s) => one(cardOf(s)?.region) },
       {
@@ -239,10 +253,6 @@ const ENVIRONMENT: Array<{ title: string; desc?: string; dims: DimDef[] }> = [
         pick: (s) => (s.answers.payment?.method === 'app_store' ? [s.answers.payment.region] : null),
       },
     ],
-  },
-  {
-    title: '关联',
-    dims: [{ q: 'C9', title: '同环境别的号被封过', labels: ENV_BAN_HISTORY, pick: (s) => [s.answers.envBanHistory] }],
   },
 ];
 

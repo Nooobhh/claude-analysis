@@ -1,5 +1,5 @@
 ---
-import { STATUS_LABEL } from '@claude-analysis/shared';
+import { ENV_PASS_SCORE, FINGERPRINT_WARN, NETWORK_WARN, STATUS_LABEL } from '@claude-analysis/shared';
 import Base from '../layouts/Base.astro';
 import { COMMIT, VERSION } from '../lib/build-info';
 import { CARDS, CHECKS, EXIT_ROWS, anchorOf } from '../lib/catalog';
@@ -7,6 +7,11 @@ import { SURVEY_URL } from '../lib/sites';
 
 const STATS = ['bad', 'warn', 'ok', 'unknown'] as const;
 const num = (i: number) => String(i).padStart(2, '0');
+/** 扣分规则全文，与问卷站看板共用 shared scoring.ts */
+const rules = (warn: typeof NETWORK_WARN) =>
+  Object.values(warn)
+    .map(([label, points]) => `${label} −${points}`)
+    .join(' · ');
 ---
 
 <Base
@@ -50,6 +55,27 @@ const num = (i: number) => String(i).padStart(2, '0');
     <p class="summary__note">
       结果码用于填写 <a href={SURVEY_URL} target="_blank" rel="noopener">Claude 使用情况调查问卷</a>：只含检测结论，不含任何 IP；在浏览器里生成后复制，不会发送任何数据。
     </p>
+    <div class="verdicts" id="verdicts" hidden>
+      {
+        [
+          ['network', '网络环境'],
+          ['fingerprint', '设备指纹'],
+        ].map(([kind, name]) => (
+          <div class="verdict" data-kind={kind}>
+            <span class="verdict__name">{name}</span>
+            <span class="tag" data-status="unknown">无法判断</span>
+            <span class="verdict__detail" />
+          </div>
+        ))
+      }
+      <details class="verdict__rules">
+        <summary>怎么判定</summary>
+        <p>满分 100，扣到 {ENV_PASS_SCORE} 分以下不通过；页面只显示通过与否和扣了哪些分，不显示分数。</p>
+        <p>网络环境：任何一项「异常」直接不通过；「注意」扣分：{rules(NETWORK_WARN)}。</p>
+        <p>设备指纹：「注意」扣分：{rules(FINGERPRINT_WARN)}。</p>
+        <p>权重是初始值，等收集到足够的封号数据再校准。</p>
+      </details>
+    </div>
     <div class="issues" id="issues" hidden>
       <h2 class="issues__title">发现的问题</h2>
       <div class="issues__list" id="issues-list"></div>

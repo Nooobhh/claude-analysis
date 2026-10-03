@@ -632,6 +632,31 @@
   font-size: 14px;
 }
 
+/* 有没答的新题：行左上角红点（像未读消息），提示文字用红色 */
+.saved__item--new {
+  position: relative;
+}
+
+.saved__item--new::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: -12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bad);
+}
+
+.saved__new {
+  color: var(--bad);
+  text-decoration-color: color-mix(in srgb, var(--bad) 40%, transparent);
+}
+
+.saved__new:hover {
+  text-decoration-color: var(--bad);
+}
+
 .saved__actions {
   display: flex;
   align-items: center;

@@ -582,7 +582,7 @@ async function renderSaved() {
       add.href = `/m?add#${s.key}`;
       info.append(' · ', add);
     }
-    const li = el('li', 'saved__item');
+    const li = el('li', missing ? 'saved__item saved__item--new' : 'saved__item');
     li.append(info, actions);
     remove.addEventListener('click', () => {
       removeSaved(s.key);

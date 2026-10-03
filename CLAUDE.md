@@ -15,7 +15,8 @@
 - 检测站不得依赖问卷站：问卷站下线后检测站照常可用；下线时删 `apps/detect/src/lib/sites.ts` 与「复制结果码」
 - 前端样式唯一依据 = `DESIGN.md`（Vercel 风中立工具风，Geist 自托管）
 - 可借用 FuckClaude / MyIP（均 MIT）的代码，搬运时在文件头保留原版权声明
-- 当前阶段不做总分 / 加权评分，单项只按客观规则标「正常 / 注意 / 异常」；评分等数据站样本足够后校准
+- 单项按客观规则标「正常 / 注意 / 异常」；网络环境、设备指纹按 shared `scoring.ts` 加权扣分，两站只显示通过与否和扣分明细，不显示分数
+- 扣分权重是初始值，改权重先改 board.md「环境判定」，检测站与看板同时生效
 
 ## 关键文件 / 命令
 - 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），问卷站 `apps/data`（Astro 7 静态页 + CF Worker + D1）

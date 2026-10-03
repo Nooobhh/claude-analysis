@@ -1,13 +1,19 @@
 ---
 // 看板 /board：整页围绕一张散点图，一个点 = 一份问卷；数据来自 /api/board（只有份数，没有单份问卷）。
 // 样式见 DESIGN.md §3.2、§4.15–4.18，统计口径与分组规则见 docs/specs/board.md
+import { ENV_PASS_SCORE, FINGERPRINT_WARN, NETWORK_WARN } from '@claude-analysis/shared';
 import Base from '../layouts/Base.astro';
 import '../styles/board.css';
+
+const rules = (warn: typeof NETWORK_WARN) =>
+  Object.values(warn)
+    .map(([label, points]) => `${label} −${points}`)
+    .join(' · ');
 ---
 
-<Base title="封号数据看板 · claude-analysis" description="按使用环境和用户行为分组，比较 Claude 账号被封的情况。只展示汇总，不展示单份问卷。" current="board">
+<Base title="问卷数据汇总 · claude-analysis" description="按使用环境和用户行为分组，比较 Claude 账号被封的情况。只展示汇总，不展示单份问卷。" current="board">
   <section class="hero board-hero">
-    <h1>封号数据看板</h1>
+    <h1>问卷数据汇总</h1>
     <p>
       封号大致两类原因：地区不支持，看使用环境；违反策略，看用户行为。下图把每份问卷按这两条放进四个象限：左上角是环境没问题、行为有违规，右下角是行为没问题、环境有问题。
     </p>
@@ -19,12 +25,16 @@ import '../styles/board.css';
   <details class="rules">
     <summary>怎么判定「环境干净」「行为干净」</summary>
     <ul>
+      <li>环境干净：网络环境、设备指纹都通过。两类各从 100 分起扣，扣到 {ENV_PASS_SCORE} 分以下不通过；只显示通过与否，不显示分数。账号环境、支付环境只展示，不进判定。</li>
+      <li>网络环境（检测站样本）：任何一项「异常」直接不通过；「注意」扣分：{rules(NETWORK_WARN)}。</li>
+      <li>设备指纹（检测站样本）：「注意」扣分：{rules(FINGERPRINT_WARN)}。检测时的系统不在填写的设备系统里的，设备指纹不算数。</li>
       <li>
-        环境干净：检测站带入的网络类检测项没有「异常」，设备指纹类全部「正常」，同一设备或网络下没有别的号被封过；手动填写的按自报的出口地区、时区、语言、节点切换、国产手机或浏览器判断。检测时的系统不在填写的设备系统里的，设备指纹不算数。
+        手动填写的样本：出口在不支持地区或节点会自动切换，网络环境不通过；设备指纹按中国时区扣 60、其他时区扣 20、中文系统扣 20、用过国产手机或浏览器扣 30。
       </li>
+      <li>扣分权重是初始值，与检测站结论卡用的是同一套，等「封禁通知里写的原因」攒够样本再校准。</li>
       <li>行为干净：自己注册或公司分配、只有本人用、没用逆向或反代、从不破限、没有蒸馏。问卷第 1 版没问蒸馏，按问到的题判断。</li>
       <li>同一网络或设备下有多个账号、代充单独标为异常行为，不算违规项。</li>
-      <li>「不清楚」「不便回答」算无法判定，这类问卷不画进散点图；检测失败的项跳过。</li>
+      <li>「不便回答」、出口「不清楚」等算无法判定，这类问卷不画进散点图；检测失败的项跳过。</li>
       <li>被封过 = 已被封禁或被封后申诉恢复。区间为 Wilson 95% 区间；少于 30 份标「低样本」，数字照样显示。</li>
       <li>问卷是自愿填写的，被封的人更愿意来填：占比只适合在组与组之间比较，不代表实际封号率。</li>
     </ul>
