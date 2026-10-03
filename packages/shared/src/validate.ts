@@ -153,7 +153,7 @@ function answers(v: unknown, today: string): SurveyAnswers {
     registeredAt,
     bannedAt,
     banAfter: banned ? one(BAN_AFTER, a.banAfter, 'banAfter') : undefined,
-    banTriggers: banned ? many(BAN_TRIGGER, a.banTriggers, 'banTriggers', ['none', 'unknown']) : undefined,
+    banTriggers: banned ? many(BAN_TRIGGER, a.banTriggers, 'banTriggers', ['none']) : undefined,
     appeal: status === 'banned' ? one(APPEAL, a.appeal, 'appeal') : undefined,
     source: one(ACCOUNT_SOURCE, a.source, 'source'),
     login,

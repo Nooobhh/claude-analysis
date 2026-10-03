@@ -13,7 +13,7 @@ import Question from './Question.astro';
   <Question id="bannedAt" num="B1" label="封禁日期" hint="记不清哪天，只选年月就行">
     <DateSelect id="bannedAt" day />
   </Question>
-  <Question id="banAfter" num="B2" label="注册后多久被封" options={BAN_AFTER} />
-  <Question id="banTriggers" num="B3" label="被封前后发生了什么" options={BAN_TRIGGER} multi exclusive={['none', 'unknown']} />
+  <Question id="banAfter" num="B2" label="使用多久后被封禁" options={BAN_AFTER} />
+  <Question id="banTriggers" num="B3" label="被封前后发生了什么" options={BAN_TRIGGER} multi exclusive={['none']} />
   <Question id="appeal" num="B4" label="申诉情况" options={APPEAL} hidden />
 </div>

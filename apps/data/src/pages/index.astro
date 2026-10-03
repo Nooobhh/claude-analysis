@@ -139,8 +139,8 @@ const GP_VIA = { ...CARD_KIND, other: '其他' };
         <Question
           id="exitType"
           num="D2"
-          label="这个账号平时用的出口是哪种"
-          hint="被封的账号按被封时的填。检测站只能看到 IP 数据库的归类，看不出 IP 是从哪来的，所以都要问。"
+          label="代理情况"
+          hint="这个账号平时通过什么方式连 Claude，被封的账号按被封时的填。检测站看不出 IP 是从哪来的，所以都要问。"
           options={EXIT_TYPE}
         />
         <Question id="envSource" num="D3" label="其他网络环境怎么填" options={ENV_SOURCE} hidden />

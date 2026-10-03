@@ -32,7 +32,7 @@ export const BAN_AFTER = {
 } as const;
 export type BanAfter = keyof typeof BAN_AFTER;
 
-/** 多选；none / unknown 与其他选项互斥 */
+/** 多选；none 与其他选项互斥 */
 export const BAN_TRIGGER = {
   signup: '刚注册',
   payment: '刚付款订阅',
@@ -40,8 +40,9 @@ export const BAN_TRIGGER = {
   node_switch: '刚换节点或地区',
   new_device: '新设备登录',
   heavy_code: '高强度用 Claude Code',
+  reverse_proxy: '进行过反代',
+  other: '其他',
   none: '没有明显事件',
-  unknown: '不清楚',
 } as const;
 export type BanTrigger = keyof typeof BAN_TRIGGER;
 
@@ -153,12 +154,12 @@ export type EnvBanHistory = keyof typeof ENV_BAN_HISTORY;
 
 /** 两条路径都问：检测站只能看到 IP 数据库的归类，看不出 IP 是从哪来的 */
 export const EXIT_TYPE = {
-  airport: '机场（共享节点）',
-  vps: '自建 VPS',
-  residential: '静态住宅 IP',
-  vpn: '商业 VPN',
-  mobile_roaming: '境外手机卡流量',
-  abroad: '人在海外直接连',
+  airport: '机场（订阅制代理，多人共用节点）',
+  vps: '自建 VPS（自己租服务器搭）',
+  residential: '静态住宅 IP（单独购买的家宽 IP）',
+  vpn: '商业 VPN（ExpressVPN、NordVPN 等独立 App）',
+  mobile_roaming: '境外手机卡流量（漫游或 eSIM）',
+  abroad: '人在海外，不用代理',
   unknown: '不清楚',
 } as const;
 export type ExitType = keyof typeof EXIT_TYPE;
@@ -208,7 +209,7 @@ export type CnClient = keyof typeof CN_CLIENT;
 export interface ManualEnv {
   /** null = 不清楚 */
   exitRegion: CountryCode | null;
-  /** 出口类型 = abroad 时不问 */
+  /** 代理情况 = abroad 时不问 */
   proxyMode?: ProxyMode;
   timezone: TimezoneSetting;
   language: SystemLanguage;
@@ -216,7 +217,7 @@ export interface ManualEnv {
   cnClient: CnClient;
 }
 
-/** 与现在的环境一致时可选检测站带入（结果码），不一致只能手动填；出口类型两条路径都问 */
+/** 与现在的环境一致时可选检测站带入（结果码），不一致只能手动填；代理情况两条路径都问 */
 export type SurveyEnv =
   | { same: true; exitType: ExitType; source: 'detect'; token: string }
   | { same: boolean; exitType: ExitType; source: 'manual'; answers: ManualEnv };

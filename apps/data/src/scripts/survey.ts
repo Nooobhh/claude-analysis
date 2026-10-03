@@ -524,7 +524,7 @@ function showDone(key: string) {
 
 form.addEventListener('change', (e) => {
   const t = e.target as HTMLInputElement;
-  // 多选互斥：选「没有 / 不清楚」清掉其他项，选其他项清掉它们
+  // 多选互斥：选「没有…」这类互斥项清掉其他项，选其他项清掉它
   if (t.type === 'checkbox' && t.checked) {
     const exclusive = 'exclusive' in t.dataset;
     form.querySelectorAll<HTMLInputElement>(`input[type="checkbox"][name="${t.name}"]`).forEach((i) => {

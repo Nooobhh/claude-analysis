@@ -124,7 +124,7 @@ function answerRows({ answers: a, env: e }: ManagedSubmission): Array<[string, s
     ['账号状态', ACCOUNT_STATUS[a.status]],
     ['注册时间', a.registeredAt ?? '不清楚'],
     ['封禁日期', a.bannedAt],
-    ['注册后多久被封', a.banAfter && BAN_AFTER[a.banAfter]],
+    ['使用多久后被封禁', a.banAfter && BAN_AFTER[a.banAfter]],
     ['被封前后发生了什么', a.banTriggers?.map((t) => BAN_TRIGGER[t]).join('、')],
     ['申诉情况', a.appeal && APPEAL[a.appeal]],
     ['账号来源', ACCOUNT_SOURCE[a.source]],
@@ -138,7 +138,7 @@ function answerRows({ answers: a, env: e }: ManagedSubmission): Array<[string, s
     ['同一设备或网络下有别的账号被封过', ENV_BAN_HISTORY[a.envBanHistory]],
     ['填写时的设备和网络与这个账号平时用的', e.same ? '一致' : '不一致'],
     ['网络环境怎么填的', e.source === 'detect' ? '检测站带入（只有检测结论，不含 IP）' : '手动填写'],
-    ['出口类型', EXIT_TYPE[e.exitType]],
+    ['代理情况', EXIT_TYPE[e.exitType]],
     ['出口国家或地区', manual ? (manual.exitRegion ? countryName(manual.exitRegion) : '不清楚') : undefined],
     ['代理模式', manual?.proxyMode && PROXY_MODE[manual.proxyMode]],
     ['系统时区', manual && TIMEZONE_SETTING[manual.timezone]],
@@ -208,7 +208,7 @@ function clearErrors() {
 
 form.addEventListener('change', (e) => {
   const t = e.target as HTMLInputElement;
-  // 多选互斥：选「没有明显事件 / 不清楚」清掉其他项，选其他项清掉它们
+  // 多选互斥：选「没有明显事件」清掉其他项，选其他项清掉它
   if (t.type === 'checkbox' && t.checked) {
     const exclusive = 'exclusive' in t.dataset;
     form.querySelectorAll<HTMLInputElement>(`input[type="checkbox"][name="${t.name}"]`).forEach((i) => {
