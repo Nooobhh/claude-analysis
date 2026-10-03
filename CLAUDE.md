@@ -49,6 +49,7 @@
 - 问卷站不读取请求 IP（含 CF-Connecting-IP 等头）、不存 IP，Worker 关日志；防刷不能靠 IP
 - 结果码的 local 段（指纹、泄露结论）只在检测页本地拼装，不得发给检测站服务器
 - 问卷站隐私页 `apps/data/src/pages/privacy.astro` 是对实现的承诺：改收集字段、第三方时同步改它
+- 问卷站浏览器存储只存管理密钥（localStorage `claudeban.saved`，见 `src/lib/saved.ts`），不存答案
 
 ## 集成点
 - 检测站：Cloudflare Workers（静态资源 + Worker API + KV 缓存），线上 `claude-analysis.ohaze.workers.dev`

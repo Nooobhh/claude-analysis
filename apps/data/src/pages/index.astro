@@ -47,6 +47,13 @@ const GP_VIA = { ...CARD_KIND, other: '其他' };
   <section class="hero survey-hero">
     <h1>Claude 使用情况调查问卷</h1>
     <p>一份问卷对应一个 Claude 账号，分 5 步，大约 3 分钟。匿名填写，不收集邮箱、账号和任何 IP。账号正常也欢迎填，以后被封了可以回来更新。</p>
+    <p class="survey-count" id="count" hidden>已收集 <span class="mono" id="count-num"></span> 份问卷</p>
+  </section>
+
+  <section class="card panel saved" id="saved" hidden>
+    <h2 class="card__title">你在这个浏览器提交过的问卷</h2>
+    <p class="card__desc">管理链接记在这个浏览器里，点开可以更新账号状态或删除问卷。用的是别人的电脑的话，记得移除。</p>
+    <ul class="saved__list" id="saved-list"></ul>
   </section>
 
   <form class="survey" id="survey" novalidate>
@@ -236,11 +243,12 @@ const GP_VIA = { ...CARD_KIND, other: '其他' };
     <p class="card__desc">谢谢！你的回答已经匿名保存。</p>
     <div class="done__body">
       <p class="done__label">管理链接</p>
-      <p class="q__hint">只显示这一次，请收藏或保存。账号状态有变化（比如被封了）用它回来更新，也可以随时删除这份问卷。</p>
+      <p class="q__hint">请收藏或保存。账号状态有变化（比如被封了）用它回来更新，也可以随时删除这份问卷。</p>
       <div class="link-row">
         <input class="input mono" id="manage-link" readonly aria-label="管理链接" />
         <button class="btn" id="copy-link" type="button">复制</button>
       </div>
+      <p class="q__hint" id="saved-note"></p>
     </div>
   </section>
 

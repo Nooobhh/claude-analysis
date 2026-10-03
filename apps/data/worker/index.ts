@@ -11,6 +11,7 @@ import {
   type DetectSnapshot,
   type ManageResponse,
   type ManagedSubmission,
+  type StatsResponse,
   type SubmitResponse,
   type SurveyAnswers,
 } from '@claude-analysis/shared';
@@ -19,7 +20,7 @@ import { RESULT_CODE_PUBLIC_KEY } from '../src/lib/result-code';
 /** 一份问卷的 JSON 远小于这个数，超过直接拒收 */
 const MAX_BODY = 32 * 1024;
 
-const reply = (body: SubmitResponse | ManageResponse | DeleteResponse | { error: string }, status = 200) =>
+const reply = (body: SubmitResponse | ManageResponse | DeleteResponse | StatsResponse | { error: string }, status = 200) =>
   Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -103,6 +104,26 @@ async function handleSubmit(req: Request, env: Env): Promise<Response> {
     return reply({ ok: false, error: 'server' }, 500);
   }
   return reply({ ok: true, key });
+}
+
+// ---------- 已收集份数 ----------
+
+// 每个 isolate 缓存 60 秒，少查 D1（Cache API 在 workers.dev 上不起作用）
+const STATS_TTL = 60_000;
+let stats: { total: number; at: number } | null = null;
+
+async function handleStats(env: Env): Promise<Response> {
+  if (!stats || Date.now() - stats.at > STATS_TTL) {
+    try {
+      const row = await env.DB.prepare('SELECT count(*) AS total FROM submissions').first<{ total: number }>();
+      stats = { total: row?.total ?? 0, at: Date.now() };
+    } catch {
+      return reply({ ok: false, error: 'server' }, 500);
+    }
+  }
+  return Response.json({ ok: true, total: stats.total } satisfies StatsResponse, {
+    headers: { 'cache-control': 'public, max-age=60' },
+  });
 }
 
 // ---------- 管理链接：凭密钥查看、更新状态、删除 ----------
@@ -197,6 +218,7 @@ export default {
   async fetch(req, env): Promise<Response> {
     const { pathname } = new URL(req.url);
     if (pathname === '/api/submissions' && req.method === 'POST') return handleSubmit(req, env);
+    if (pathname === '/api/stats' && req.method === 'GET') return handleStats(env);
     if (pathname === '/api/submission') {
       if (req.method === 'GET') return handleGet(req, env);
       if (req.method === 'PATCH') return handleUpdate(req, env);

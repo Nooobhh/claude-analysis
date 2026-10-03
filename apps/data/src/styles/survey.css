@@ -2,6 +2,7 @@
 
 /* 标题、步骤条、问卷、提交后页面、管理页同一列居中，列内文字左对齐 */
 .survey-hero,
+.saved,
 .survey,
 .done,
 .manage {
@@ -592,4 +593,70 @@
 
 .manage .survey__nav .btn--primary {
   margin-left: auto;
+}
+
+/* ---------- 已收集份数、浏览器记住的问卷 ---------- */
+
+.survey-count {
+  margin-top: 8px;
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.survey-count .mono {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.saved {
+  margin-bottom: 16px;
+}
+
+.saved__list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saved__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+
+.saved__info {
+  font-size: 14px;
+}
+
+.saved__actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* 文字按钮：外观同正文链接（DESIGN.md §4.9） */
+.link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 3px;
+  cursor: pointer;
+  transition: text-decoration-color 150ms ease;
+}
+
+.link-btn:hover {
+  text-decoration-color: var(--fg);
+}
+
+.manage__saved {
+  color: var(--fg-muted);
+  font-size: 13px;
 }

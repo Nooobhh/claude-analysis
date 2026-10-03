@@ -41,6 +41,7 @@ import {
   type StatusUpdate,
 } from '@claude-analysis/shared';
 import { countryName } from '../lib/countries';
+import { addSaved, removeSaved } from '../lib/saved';
 
 const key = location.hash.slice(1);
 const form = document.querySelector<HTMLFormElement>('#status-form')!;
@@ -271,6 +272,7 @@ document.querySelector('#delete')!.addEventListener('click', async () => {
   if (!confirm('确定删除这份问卷？删除后无法恢复。')) return;
   const r = await api<DeleteResponse>('DELETE');
   if (!r?.ok) return toast('删除失败，请稍后再试');
+  removeSaved(key);
   // 去掉地址栏里的密钥，链接已经失效
   history.replaceState(null, '', location.pathname);
   showMessage('已删除。这份问卷和它的状态记录已经从数据库删掉。');
@@ -278,12 +280,27 @@ document.querySelector('#delete')!.addEventListener('click', async () => {
 
 // ---------- 初始化 ----------
 
+/** 打开过管理链接的浏览器默认记住这份问卷（只存密钥），可以移除 */
+function rememberHere() {
+  const line = document.querySelector<HTMLElement>('#saved-line')!;
+  line.hidden = !addSaved(key);
+  document.querySelector('#forget')!.addEventListener('click', () => {
+    removeSaved(key);
+    line.textContent = '已从这个浏览器移除；问卷本身还在，凭管理链接仍能打开。';
+  });
+}
+
 async function init() {
   if (!/^[A-Za-z0-9_-]{22}$/.test(key)) return showMessage('链接不完整：请使用提交问卷后拿到的完整管理链接。');
   const r = await api<ManageResponse>('GET');
   if (!r) showMessage('网络出错，请刷新页面重试。');
-  else if (!r.ok) showMessage('没有找到这份问卷：可能已经删除，或者链接不完整。');
-  else render(r.submission);
+  else if (!r.ok) {
+    removeSaved(key);
+    showMessage('没有找到这份问卷：可能已经删除，或者链接不完整。');
+  } else {
+    render(r.submission);
+    rememberHere();
+  }
 }
 
 // 在这个页面上把完整链接粘进地址栏只会改 #，浏览器不重新加载，要手动重来一遍

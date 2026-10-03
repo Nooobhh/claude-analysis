@@ -370,3 +370,6 @@ export type ManageError = 'not_found' | 'bad_request' | 'invalid' | 'server';
 export type ManageResponse = { ok: true; submission: ManagedSubmission } | { ok: false; error: ManageError; field?: string };
 /** DELETE /api/submission 的返回 */
 export type DeleteResponse = { ok: true } | { ok: false; error: ManageError };
+
+/** GET /api/stats：已收集的问卷份数（问卷页标题下显示） */
+export type StatsResponse = { ok: true; total: number } | { ok: false; error: 'server' };

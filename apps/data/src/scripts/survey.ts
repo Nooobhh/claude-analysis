@@ -1,5 +1,6 @@
 // 问卷页：分步导航、显示条件、多选互斥、按步校验，生成 SurveySubmission 提交到 /api/submissions
 import {
+  ACCOUNT_STATUS,
   IP_TYPE_LABEL,
   RESULT_CODE_TTL,
   STATUS_LABEL,
@@ -39,6 +40,7 @@ import {
   type ResultCodeError,
   type ReverseProxy,
   type Sharing,
+  type StatsResponse,
   type Status,
   type SubmitError,
   type SubmitResponse,
@@ -51,6 +53,7 @@ import {
 } from '@claude-analysis/shared';
 import { countryName } from '../lib/countries';
 import { RESULT_CODE_PUBLIC_KEY } from '../lib/result-code';
+import { addSaved, fetchSubmission, listSaved, removeSaved } from '../lib/saved';
 
 const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
@@ -514,10 +517,69 @@ async function submit(data: SurveySubmission) {
 /** 管理链接：密钥放在 # 后面，不会发给服务器，也不进 Referer */
 function showDone(key: string) {
   document.querySelector<HTMLInputElement>('#manage-link')!.value = `${location.origin}/m#${key}`;
+  // 默认在这个浏览器记住（只存密钥），可以撤回
+  const note = document.querySelector<HTMLElement>('#saved-note')!;
+  if (addSaved(key)) {
+    const forget = el('button', 'link-btn', '不在这个浏览器保存');
+    forget.type = 'button';
+    forget.addEventListener('click', () => {
+      removeSaved(key);
+      note.textContent = '已不在这个浏览器保存，请自己收藏上面的链接。';
+    });
+    note.replaceChildren('已在这个浏览器记住这份问卷，下次打开问卷页就能直接看到。换浏览器或清除浏览器数据后只能靠上面的链接，建议也另外保存。 ', forget);
+  } else {
+    note.textContent = '这个浏览器不允许保存，请自己收藏上面的链接。';
+  }
+  document.querySelector<HTMLElement>('#saved')!.hidden = true;
   form.hidden = true;
   done.hidden = false;
   dirty = false;
   window.scrollTo({ top: 0 });
+}
+
+// ---------- 已收集份数、浏览器记住的问卷 ----------
+
+async function showCount() {
+  try {
+    const r = (await (await fetch('/api/stats')).json()) as StatsResponse;
+    if (!r.ok) return;
+    document.querySelector('#count-num')!.textContent = String(r.total);
+    document.querySelector<HTMLElement>('#count')!.hidden = false;
+  } catch {
+    /* 读不到就不显示 */
+  }
+}
+
+/** 页面顶部列出这个浏览器记住的问卷；服务器上已经删除的，顺手从浏览器里移除 */
+async function renderSaved() {
+  const card = document.querySelector<HTMLElement>('#saved')!;
+  const items = await Promise.all(listSaved().map(async (s) => ({ s, r: await fetchSubmission(s.key) })));
+  const rows = items.flatMap(({ s, r }) => {
+    if (r && !r.ok && r.error === 'not_found') {
+      removeSaved(s.key);
+      return [];
+    }
+    const sub = r?.ok ? r.submission : null;
+    const status = sub ? ACCOUNT_STATUS[sub.answers.status] : '暂时读不到状态';
+    const open = el('a', 'btn', '查看 / 更新状态');
+    open.href = `/m#${s.key}`;
+    const remove = el('button', 'link-btn', '移除');
+    remove.type = 'button';
+    const actions = el('span', 'saved__actions');
+    actions.append(open, remove);
+    const li = el('li', 'saved__item');
+    li.append(el('span', 'saved__info', `${sub?.createdOn ?? s.savedOn} 提交 · ${status}`), actions);
+    remove.addEventListener('click', () => {
+      removeSaved(s.key);
+      li.remove();
+      card.hidden = !card.querySelector('.saved__item');
+      toast('已从这个浏览器移除，问卷本身还在');
+    });
+    return [li];
+  });
+  document.querySelector('#saved-list')!.replaceChildren(...rows);
+  // 提交后已切到完成页时不再显示
+  card.hidden = !rows.length || !done.hidden;
 }
 
 // ---------- 事件 ----------
@@ -592,3 +654,5 @@ history.replaceState({ step: 0 }, '');
 update();
 go(0, false);
 nextBtn.disabled = false;
+void showCount();
+void renderSaved();

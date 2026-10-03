@@ -17,6 +17,9 @@ import '../styles/survey.css';
     <p class="card manage__msg" id="msg">正在读取问卷…</p>
 
     <div class="manage__body" id="body" hidden>
+      <p class="manage__saved" id="saved-line" hidden>
+        已在这个浏览器记住这份问卷，打开问卷页就能看到。{' '}<button class="link-btn" id="forget" type="button">从这个浏览器移除</button>
+      </p>
       <section class="card panel">
         <h2 class="card__title"><span class="card__num">01</span>更新账号状态</h2>
         <p class="card__desc" id="timeline"></p>
