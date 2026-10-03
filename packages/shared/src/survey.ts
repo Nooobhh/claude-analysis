@@ -149,8 +149,9 @@ export const ENV_BAN_HISTORY = {
 } as const;
 export type EnvBanHistory = keyof typeof ENV_BAN_HISTORY;
 
-// ---------- D 网络环境（手动填写路径） ----------
+// ---------- D 网络环境 ----------
 
+/** 两条路径都问：检测站只能看到 IP 数据库的归类，看不出 IP 是从哪来的 */
 export const EXIT_TYPE = {
   airport: '机场（共享节点）',
   vps: '自建 VPS',
@@ -161,6 +162,8 @@ export const EXIT_TYPE = {
   unknown: '不清楚',
 } as const;
 export type ExitType = keyof typeof EXIT_TYPE;
+
+// 以下只在手动填写路径问
 
 export const PROXY_MODE = {
   rule: '规则分流',
@@ -186,20 +189,37 @@ export const SYSTEM_LANGUAGE = {
 } as const;
 export type SystemLanguage = keyof typeof SYSTEM_LANGUAGE;
 
+/** 对应检测站的「IP 漂移」 */
+export const NODE_SWITCH = {
+  fixed: '固定用一个',
+  auto: '会自动切换（负载均衡、自动选最快节点等）',
+  unknown: '不清楚',
+} as const;
+export type NodeSwitch = keyof typeof NODE_SWITCH;
+
+/** 对应检测站的「国产浏览器 / 设备」 */
+export const CN_CLIENT = {
+  yes: '有',
+  no: '没有',
+  unknown: '不清楚',
+} as const;
+export type CnClient = keyof typeof CN_CLIENT;
+
 export interface ManualEnv {
   /** null = 不清楚 */
   exitRegion: CountryCode | null;
-  exitType: ExitType;
-  /** exitType = abroad 时不问 */
+  /** 出口类型 = abroad 时不问 */
   proxyMode?: ProxyMode;
   timezone: TimezoneSetting;
   language: SystemLanguage;
+  nodeSwitch: NodeSwitch;
+  cnClient: CnClient;
 }
 
-/** 与现在的环境一致时可选检测站带入（token），不一致只能手动填 */
+/** 与现在的环境一致时可选检测站带入（结果码），不一致只能手动填；出口类型两条路径都问 */
 export type SurveyEnv =
-  | { same: true; source: 'detect'; token: string }
-  | { same: boolean; source: 'manual'; answers: ManualEnv };
+  | { same: true; exitType: ExitType; source: 'detect'; token: string }
+  | { same: boolean; exitType: ExitType; source: 'manual'; answers: ManualEnv };
 
 // ---------- E 使用习惯 ----------
 
@@ -317,3 +337,34 @@ export interface SurveySubmission {
   /** D 网络环境 */
   env: SurveyEnv;
 }
+
+/** POST /api/submissions 的返回；key = 管理链接密钥，只返回这一次，服务器只存它的哈希 */
+export type SubmitError =
+  | 'bad_request'
+  | 'invalid'
+  | 'code_format'
+  | 'code_signature'
+  | 'code_expired'
+  | 'code_used'
+  | 'server';
+export type SubmitResponse = { ok: true; key: string } | { ok: false; error: SubmitError; field?: string };
+
+/** 管理链接能改的字段：账号状态，以及随状态出现的封禁详情与退款 */
+export const STATUS_FIELDS = ['status', 'bannedAt', 'banAfter', 'banTriggers', 'appeal', 'refund'] as const;
+export type StatusUpdate = Pick<SurveyAnswers, (typeof STATUS_FIELDS)[number]>;
+
+/** GET / PATCH /api/submission 返回的问卷（凭管理密钥） */
+export interface ManagedSubmission {
+  answers: SurveyAnswers;
+  /** 入库的网络环境：不含结果码原文 */
+  env: { same: true; exitType: ExitType; source: 'detect' } | Extract<SurveyEnv, { source: 'manual' }>;
+  createdOn: string;
+  updatedOn: string;
+  /** 状态变化记录，按时间先后 */
+  events: Array<{ status: AccountStatus; onDate: string }>;
+}
+
+export type ManageError = 'not_found' | 'bad_request' | 'invalid' | 'server';
+export type ManageResponse = { ok: true; submission: ManagedSubmission } | { ok: false; error: ManageError; field?: string };
+/** DELETE /api/submission 的返回 */
+export type DeleteResponse = { ok: true } | { ok: false; error: ManageError };

@@ -1,5 +1,5 @@
 // IP 属性与风险（经本站 Worker 查询）+ 交叉比对
-import type { IpApiError, IpApiResponse, IpInfo } from '@claude-analysis/shared';
+import { IP_TYPE_LABEL, type IpApiError, type IpApiResponse, type IpInfo } from '@claude-analysis/shared';
 import { countryName, fetchWithTimeout } from '../net';
 import { flag, type Result } from '../result';
 import { SUPPORTED_COUNTRIES, ZH_SPEAKING } from '../regions';
@@ -43,16 +43,7 @@ export function judgeRegion(cc: string | undefined): Result {
   return { status: 'bad', tag: '不支持', value, reason: '不在 Anthropic 公布的支持地区列表内' };
 }
 
-/**
- * 两家的类型分类角度不同：proxycheck 看地址用途，ipapi.is 看所属机构，
- * 同一个英文值（business）意思也不同，所以分开翻译
- */
-const TYPE_LABEL: Record<RiskSource, Record<string, string>> = {
-  'proxycheck.io': { residential: '家庭宽带', business: '企业线路', wireless: '移动网络', hosting: '机房' },
-  'ipapi.is': { isp: '运营商', hosting: '机房', education: '教育网', government: '政府网络', banking: '金融机构', business: '其他机构' },
-};
-
-type RiskSource = 'proxycheck.io' | 'ipapi.is';
+type RiskSource = keyof typeof IP_TYPE_LABEL;
 
 /** 有风险数据的数据源（ipinfo 只有基础属性，不参与） */
 const riskSources = (info: IpInfo) => info.sources.filter((s): s is RiskSource => s !== 'ipinfo');
@@ -71,7 +62,7 @@ export function judgeType(r: IpApiResponse | null): Result {
   const verdicts = riskSources(info).map((src) => {
     const raw = risk.typeBy[src];
     const hosting = risk.flaggedBy.datacenter.includes(src) || raw === 'hosting';
-    return { src, hosting, label: hosting ? '机房' : (TYPE_LABEL[src][raw ?? ''] ?? '未知') };
+    return { src, hosting, label: hosting ? '机房' : (IP_TYPE_LABEL[src][raw ?? ''] ?? '未知') };
   });
   const both = verdicts.length > 1 ? sideBySide(verdicts.map((v) => [v.src, v.label])) : [];
   const hostingCount = verdicts.filter((v) => v.hosting).length;

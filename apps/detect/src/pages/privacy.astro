@@ -15,6 +15,10 @@ import { ANTHROPIC_DOMAINS } from '../lib/catalog';
       <li><strong>国内出口 IP</strong>（你的宽带 IP）：只在本页显示，不会发给本站服务器，复制报告也不包含它。</li>
       <li><strong>环境指纹</strong>：时区、语言、区域格式、字体、浏览器与设备信息，全部在本地计算。</li>
       <li><strong>WebRTC 与 DNS 检测结果</strong>：只在本地比对和显示。WebRTC 拿到的 IP 是否在中国大陆，用本站自带的 APNIC 分配表在浏览器里判断，不查询任何服务器。</li>
+      <li>
+        <strong>结果码</strong>：点「复制结果码」时，浏览器把检测结论拼成一段文字放进剪贴板，不发送任何数据，结果码里也不含任何 IP。
+        其中 IP 属性一段带本站签名，问卷站据此确认这些属性是本站查到的、没被改过。只有你自己把它粘贴进问卷，它才会离开你的设备。
+      </li>
       <li>页面不使用 Cookie，也不往 localStorage 写任何东西；「显示 IP」开关刷新即恢复。</li>
     </ul>
 
@@ -24,6 +28,7 @@ import { ANTHROPIC_DOMAINS } from '../lib/catalog';
       <li>
         <code>/api/ip</code>：发送 <strong>claude.ai 的出口 IP</strong>（放在请求体里，不进 URL），用于查询 IP 归属与风险标记。
         查询结果以「加盐哈希」为 key 缓存 24 小时，不保存 IP 原文；限频同样按请求者 IP 的加盐哈希计数。
+        返回结果附带本站对这些 IP 属性的签名（不含 IP 本身），供「复制结果码」使用。
       </li>
       <li><code>/api/status</code>：转发 Claude 官方状态页，不含任何个人数据。</li>
     </ul>

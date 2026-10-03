@@ -34,7 +34,8 @@
 pnpm install
 pnpm dev          # 检测站前端 http://localhost:4321（/api 代理到 :8787）
 pnpm dev:worker   # 构建后用 wrangler dev 跑 Worker + 静态资源 http://localhost:8787
-pnpm dev:data     # 问卷站 http://localhost:4322
+pnpm dev:data     # 问卷站前端 http://localhost:4322（/api 代理到 :8788）
+pnpm dev:data-worker  # 构建后用 wrangler dev 跑问卷站 Worker + 本地 D1 http://localhost:8788
 pnpm build        # 构建检测站到 apps/detect/dist
 pnpm typecheck    # 生成 Worker 类型，检查两站与 Worker 的类型
 pnpm run deploy   # 本地手动部署检测站，仅应急用（需先 wrangler login；不能省略 run）
@@ -52,6 +53,8 @@ pnpm run deploy:data  # 同上，部署问卷站
 
 Worker 运行时用到的 secret（见下方「配置」）存在 Cloudflare 上，部署不会覆盖。
 
+问卷站的数据存在 Cloudflare D1（数据库 `claudeban`），表结构在 `apps/data/migrations/`。CI 不改表结构；新增 migration 后，先在本地执行 `pnpm --filter @claude-analysis/data exec wrangler d1 migrations apply claudeban --remote`，再推送部署。
+
 ## 配置
 
 Worker 用到的 secret（线上用 `wrangler secret put <名字>` 设置，本地写进 `apps/detect/.dev.vars`）：
@@ -62,6 +65,7 @@ Worker 用到的 secret（线上用 `wrangler secret put <名字>` 设置，本�
 | `PROXYCHECK_KEY` | 线上是 | [proxycheck.io](https://proxycheck.io) 免费账号 key（每天 1000 次）。Workers 出口 IP 多人共享，匿名额度在线上基本被占满 |
 | `IPAPI_KEY` | 否 | [ipapi.is](https://ipapi.is) 免费账号 key（每天 1000 次）；配置后与 proxycheck 并行查询，风险项取并集（注册需用非代理网络） |
 | `IPINFO_TOKEN` | 否 | ipinfo.io token；前两个都失败时的兜底，只有基础属性 |
+| `RESULT_CODE_KEY` | 否 | 结果码签名私钥（Ed25519，PKCS#8 base64），对应公钥写在问卷站 `apps/data/src/lib/result-code.ts`；未配置时检测页不能复制结果码 |
 
 中国大陆 IPv4 段（`apps/detect/public/cn-ipv4.bin`，用于本地判断 WebRTC 泄露的 IP）从 APNIC 分配表生成，刷新：`pnpm --filter @claude-analysis/detect gen:cn-ipv4`。
 
@@ -69,7 +73,7 @@ Worker 用到的 secret（线上用 `wrangler secret put <名字>` 设置，本�
 
 - 国内出口 IP（即你的真实宽带 IP）只在你的浏览器里显示，不会发往任何服务器
 - 服务器只收到用于查询属性的 Claude 出口 IP，缓存用加盐 hash、24 小时过期，不记访问日志
-- 环境指纹全部在本地计算，不上传
+- 环境指纹全部在本地计算，不上传；「复制结果码」在浏览器里拼装，不发送数据，结果码不含任何 IP
 - 没有任何统计、广告或追踪脚本
 - 页面会访问哪些第三方服务，隐私页逐个列明
 

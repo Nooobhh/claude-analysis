@@ -2,13 +2,13 @@
 > 项目 overview（现在 + 未来）。已发布历史看 CHANGELOG.md，agent 指令看 CLAUDE.md。
 
 ## 当前主线
-0.4.0 — 问卷站首版：匿名问卷收集封号数据，检测结果一键带入（问卷设计见 [docs/specs/survey.md](./docs/specs/survey.md)）
+0.4.0 — 问卷站首版：匿名问卷收集封号数据，检测结果用结果码带入（问卷设计见 [docs/specs/survey.md](./docs/specs/survey.md)）
 
-- [ ] 检测站生成签名检测结果码，加「复制结果码」按钮
-- [ ] 问卷站部署到 Cloudflare Workers（claudeban.ohaze.workers.dev）+ 选存储
-- [ ] 问卷页：5 步向导、检测 / 手动两条环境路径、提交校验
-- [ ] 匿名管理链接：修改 / 删除，状态变化记事件
-- [ ] 问卷站隐私页
+- [x] 检测站生成签名检测结果码，加「复制结果码」按钮
+- [x] 问卷站提交接口 + D1 存储（站点已部署到 claudeban.ohaze.workers.dev）
+- [x] 问卷页：5 步向导、检测 / 手动两条环境路径、提交校验
+- [x] 匿名管理链接：修改 / 删除，状态变化记事件
+- [x] 问卷站隐私页
 
 ## Backlog
 - P2 看板：按维度展示封禁占比 + 置信区间，n≥30 才出结论；检测页显示「本站反馈」

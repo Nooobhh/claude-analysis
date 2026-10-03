@@ -110,8 +110,20 @@ export interface IpInfo {
   registration: IpRegistration | null;
 }
 
+/**
+ * 网络类型中文名。两家的分类角度不同：proxycheck 看地址用途，ipapi.is 看所属机构，
+ * 同一个英文值（business）意思也不同，所以分开翻译
+ */
+export const IP_TYPE_LABEL: Record<'proxycheck.io' | 'ipapi.is', Record<string, string>> = {
+  'proxycheck.io': { residential: '家庭宽带', business: '企业线路', wireless: '移动网络', hosting: '机房' },
+  'ipapi.is': { isp: '运营商', hosting: '机房', education: '教育网', government: '政府网络', banking: '金融机构', business: '其他机构' },
+};
+
 export type IpApiError = 'bad_request' | 'rate_limited' | 'upstream';
-export type IpApiResponse = { ok: true; data: IpInfo } | { ok: false; error: IpApiError };
+export type IpApiResponse =
+  /** signed：检测站对这份 IP 属性的签名（结果码的 signed 段），未配置签名私钥时缺省 */
+  | { ok: true; data: IpInfo; signed?: string }
+  | { ok: false; error: IpApiError };
 
 /** GET /api/status：status.claude.com 的精简转发 */
 export interface ServiceStatus {
@@ -126,3 +138,5 @@ export type StatusApiResponse = { ok: true; data: ServiceStatus } | { ok: false;
 
 export * from './survey';
 export * from './snapshot';
+export * from './result-code';
+export * from './validate';

@@ -9,3 +9,4 @@ dist/
 
 # wrangler types 生成物
 apps/detect/worker-configuration.d.ts
+apps/data/worker-configuration.d.ts

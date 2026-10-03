@@ -4,8 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
+    "dev:worker": "astro build && wrangler d1 migrations apply claudeban --local && wrangler dev --port 8788",
     "build": "astro build",
-    "typecheck": "astro sync && tsc --noEmit",
+    "typecheck": "wrangler types && astro sync && tsc --noEmit -p worker && tsc --noEmit",
     "deploy": "astro build && wrangler deploy"
   },
   "dependencies": {

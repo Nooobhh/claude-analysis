@@ -1,0 +1,19 @@
+---
+// 封禁详情 B1–B4：问卷第 1 步与管理页共用；显示条件由页面脚本控制（status ≠ active 时显示，B4 只在 banned 时）
+import { APPEAL, BAN_AFTER, BAN_TRIGGER } from '@claude-analysis/shared';
+import DateSelect from './DateSelect.astro';
+import Question from './Question.astro';
+---
+
+<div class="ban" data-section="ban" hidden>
+  <div class="ban__head">
+    <h3>封禁详情</h3>
+    <p class="card__desc">只有被封过的账号需要填。</p>
+  </div>
+  <Question id="bannedAt" num="B1" label="封禁日期" hint="记不清哪天，只选年月就行">
+    <DateSelect id="bannedAt" day />
+  </Question>
+  <Question id="banAfter" num="B2" label="注册后多久被封" options={BAN_AFTER} />
+  <Question id="banTriggers" num="B3" label="被封前后发生了什么" options={BAN_TRIGGER} multi exclusive={['none', 'unknown']} />
+  <Question id="appeal" num="B4" label="申诉情况" options={APPEAL} hidden />
+</div>

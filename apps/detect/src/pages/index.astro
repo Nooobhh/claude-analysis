@@ -1,7 +1,9 @@
 ---
 import { STATUS_LABEL } from '@claude-analysis/shared';
 import Base from '../layouts/Base.astro';
+import { COMMIT, VERSION } from '../lib/build-info';
 import { CARDS, CHECKS, EXIT_ROWS, anchorOf } from '../lib/catalog';
+import { SURVEY_URL } from '../lib/sites';
 
 const STATS = ['bad', 'warn', 'ok', 'unknown'] as const;
 const num = (i: number) => String(i).padStart(2, '0');
@@ -40,10 +42,14 @@ const num = (i: number) => String(i).padStart(2, '0');
         <span class="summary__label" id="progress-label">检测中 0/{CHECKS.length}</span>
         <div class="summary__actions">
           <button class="btn" id="rerun" type="button">重新检测</button>
+          <button class="btn" id="copy-code" type="button" data-version={VERSION} data-commit={COMMIT}>复制结果码</button>
           <button class="btn btn--primary" id="copy" type="button">复制报告</button>
         </div>
       </div>
     </div>
+    <p class="summary__note">
+      结果码用于填写 <a href={SURVEY_URL} target="_blank" rel="noopener">Claude 使用情况调查问卷</a>：只含检测结论，不含任何 IP；在浏览器里生成后复制，不会发送任何数据。
+    </p>
     <div class="issues" id="issues" hidden>
       <h2 class="issues__title">发现的问题</h2>
       <div class="issues__list" id="issues-list"></div>

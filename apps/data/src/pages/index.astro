@@ -4,17 +4,16 @@ import {
   ACCOUNT_SOURCE,
   ACCOUNT_STATUS,
   ACCOUNTS_IN_ENV,
-  APPEAL,
-  BAN_AFTER,
-  BAN_TRIGGER,
   CARD_KIND,
   CHAT_LANGUAGE,
   CLIENT,
+  CN_CLIENT,
   EMAIL_TYPE,
   ENV_BAN_HISTORY,
   EXIT_TYPE,
   JAILBREAK,
   LOGIN_METHOD,
+  NODE_SWITCH,
   OS,
   PAYMENT_METHOD,
   PHONE_VERIFY,
@@ -27,8 +26,8 @@ import {
   TEXT_LIMITS,
   TIMEZONE_SETTING,
   USAGE_CAP,
-  type Status,
 } from '@claude-analysis/shared';
+import BanQuestions from '../components/survey/BanQuestions.astro';
 import DateSelect from '../components/survey/DateSelect.astro';
 import Question from '../components/survey/Question.astro';
 import RegionSelect from '../components/survey/RegionSelect.astro';
@@ -42,29 +41,11 @@ const num = (i: number) => String(i + 1).padStart(2, '0');
 const ENV_SAME = { same: '一致', different: '不一致' };
 const ENV_SOURCE = { detect: '用检测站自动获取', manual: '手动填写' };
 const GP_VIA = { ...CARD_KIND, other: '其他' };
-
-/** 结果码解析还没实现，粘贴后先显示这份示例 */
-const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string]> = [
-  ['Claude 出口地区', '美国', 'ok', '支持地区'],
-  ['原生 IP', '登记于美国 · ARIN', 'ok', '原生 IP'],
-  ['网络类型', 'ipapi.is 机房 · proxycheck.io 企业线路', 'warn', '存在分歧'],
-  ['ASN / 运营商', 'AS64500 · Example Hosting'],
-  ['VPN / 代理 / Tor', '', 'ok', '未检测到'],
-  ['滥用记录', '', 'ok', '无记录'],
-  ['风险分', '12 / 100', 'ok', '低风险'],
-  ['多域名出口', '', 'ok', '8/8 一致'],
-  ['IP 漂移', '', 'ok', '5 次一致'],
-  ['系统时区', 'Asia/Shanghai', 'warn', '中国时区'],
-  ['浏览器语言', 'zh-CN, en', 'warn', '简体中文'],
-  ['中文字体 / 国产浏览器 / 设备', '', 'ok', '未检测到'],
-  ['WebRTC', '', 'ok', '未泄露'],
-  ['DNS 解析器', '美国', 'ok', '未泄露'],
-];
 ---
 
-<Base title="Claude 封号情况问卷 · claude-analysis" description="匿名问卷：收集不同使用环境下 Claude 账号的封禁情况。不收集邮箱、账号和任何 IP。">
-  <section class="hero">
-    <h1>封号情况问卷</h1>
+<Base title="Claude 使用情况调查问卷 · claude-analysis" description="匿名问卷：收集不同使用环境下 Claude 账号的封禁情况。不收集邮箱、账号和任何 IP。">
+  <section class="hero survey-hero">
+    <h1>Claude 使用情况调查问卷</h1>
     <p>一份问卷对应一个 Claude 账号，分 5 步，大约 3 分钟。匿名填写，不收集邮箱、账号和任何 IP。账号正常也欢迎填，以后被封了可以回来更新。</p>
   </section>
 
@@ -89,18 +70,7 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
         <Question id="registeredAt" num="A2" label="注册时间" hint="买来或别人共享的账号不知道，可以勾「不清楚」">
           <DateSelect id="registeredAt" unknown />
         </Question>
-        <div class="ban" data-section="ban" hidden>
-          <div class="ban__head">
-            <h3>封禁详情</h3>
-            <p class="card__desc">只有被封过的账号需要填。</p>
-          </div>
-          <Question id="bannedAt" num="B1" label="封禁日期" hint="记不清哪天，只选年月就行">
-            <DateSelect id="bannedAt" day />
-          </Question>
-          <Question id="banAfter" num="B2" label="注册后多久被封" options={BAN_AFTER} />
-          <Question id="banTriggers" num="B3" label="被封前后发生了什么" options={BAN_TRIGGER} multi exclusive={['none', 'unknown']} />
-          <Question id="appeal" num="B4" label="申诉情况" options={APPEAL} hidden />
-        </div>
+        <BanQuestions />
       </div>
     </section>
 
@@ -166,7 +136,14 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
           hint="被封的账号，和被封时用的比。不一致只能手动填写。"
           options={ENV_SAME}
         />
-        <Question id="envSource" num="D2" label="网络环境怎么填" options={ENV_SOURCE} hidden />
+        <Question
+          id="exitType"
+          num="D2"
+          label="这个账号平时用的出口是哪种"
+          hint="被封的账号按被封时的填。检测站只能看到 IP 数据库的归类，看不出 IP 是从哪来的，所以都要问。"
+          options={EXIT_TYPE}
+        />
+        <Question id="envSource" num="D3" label="其他网络环境怎么填" options={ENV_SOURCE} hidden />
 
         <div class="sub detect" data-sub="detect" hidden>
           <ol class="detect__steps">
@@ -189,34 +166,16 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
               >
             </p>
           </div>
-          <Question id="resultCode" label="结果码" hint="预览：检测站的「复制结果码」还没做，随便粘贴一段文字就能看到带入效果">
+          <Question id="resultCode" label="结果码" hint="有效期 1 小时，从在检测站检测时算起">
             <textarea class="input textarea textarea--code" name="resultCode" rows="3" placeholder="粘贴结果码" spellcheck="false"></textarea>
           </Question>
           <div class="snap" id="snap" hidden>
             <div class="snap__head">
               <span>从检测站带入</span>
-              <span class="tag" data-status="neutral">示例数据</span>
+              <span class="tag" data-status="neutral" id="snap-verified"></span>
             </div>
-            <div class="snap__rows">
-              {
-                SAMPLE.map(([label, value, status, tag]) => (
-                  <div class="check">
-                    <div class="check__main">
-                      <span class="check__name">{label}</span>
-                      <span class="check__right">
-                        {value && <span class="check__value">{value}</span>}
-                        {tag && (
-                          <span class="tag" data-status={status}>
-                            {tag}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              }
-            </div>
-            <p class="snap__foot">只带检测结论，不含任何 IP。检测于 2026-10-01 10:30 · 检测站 v0.3.0</p>
+            <div class="snap__rows" id="snap-rows"></div>
+            <p class="snap__foot" id="snap-foot"></p>
           </div>
         </div>
 
@@ -225,10 +184,17 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
           <Question id="exitRegion" num="M1" label="访问 Claude 时出口在哪个国家或地区">
             <RegionSelect name="exitRegion" label="出口国家或地区" unknown />
           </Question>
-          <Question id="exitType" num="M2" label="出口类型" options={EXIT_TYPE} />
-          <Question id="proxyMode" num="M3" label="代理模式" options={PROXY_MODE} />
-          <Question id="timezone" num="M4" label="系统时区" options={TIMEZONE_SETTING} />
-          <Question id="language" num="M5" label="系统和浏览器语言" options={SYSTEM_LANGUAGE} />
+          <Question id="proxyMode" num="M2" label="代理模式" options={PROXY_MODE} />
+          <Question id="timezone" num="M3" label="系统时区" options={TIMEZONE_SETTING} />
+          <Question id="language" num="M4" label="系统和浏览器语言" options={SYSTEM_LANGUAGE} />
+          <Question id="nodeSwitch" num="M5" label="节点会不会自动切换" options={NODE_SWITCH} />
+          <Question
+            id="cnClient"
+            num="M6"
+            label="有没有在国产手机或国产浏览器上用过 Claude"
+            hint="如华为、小米等手机，QQ、夸克、360 等浏览器，或在微信里直接打开"
+            options={CN_CLIENT}
+          />
         </div>
       </div>
     </section>
@@ -267,7 +233,7 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
 
   <section class="card panel done" id="done" hidden>
     <h2 class="card__title">提交成功</h2>
-    <p class="card__desc">预览：提交接口还没上线，这里只演示提交后的样子，内容没有发出去。</p>
+    <p class="card__desc">谢谢！你的回答已经匿名保存。</p>
     <div class="done__body">
       <p class="done__label">管理链接</p>
       <p class="q__hint">只显示这一次，请收藏或保存。账号状态有变化（比如被封了）用它回来更新，也可以随时删除这份问卷。</p>
@@ -275,10 +241,6 @@ const SAMPLE: Array<[label: string, value: string, status?: Status, tag?: string
         <input class="input mono" id="manage-link" readonly aria-label="管理链接" />
         <button class="btn" id="copy-link" type="button">复制</button>
       </div>
-      <details class="details">
-        <summary>提交内容（JSON）</summary>
-        <pre class="json mono" id="json"></pre>
-      </details>
     </div>
   </section>
 

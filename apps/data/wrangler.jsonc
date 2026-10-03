@@ -1,10 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  // 问卷站：claudeban.ohaze.workers.dev；目前只有静态页，没有 Worker 代码
+  // 问卷站：claudeban.ohaze.workers.dev
   "name": "claudeban",
+  "main": "worker/index.ts",
   // 与检测站一致：本地 workerd 支持到 2026-09-26，不能晚于它
   "compatibility_date": "2026-09-26",
-  "assets": { "directory": "./dist" },
+  "assets": { "directory": "./dist", "run_worker_first": ["/api/*"] },
+  // 问卷数据。表结构在 migrations/；线上新增 migration 后先跑 wrangler d1 migrations apply claudeban --remote 再部署
+  "d1_databases": [{ "binding": "DB", "database_name": "claudeban", "database_id": "ccc9c6d6-d068-4779-bd08-7aeac526ee8e" }],
   // 隐私：不开日志 / 追踪
   "observability": { "enabled": false }
 }

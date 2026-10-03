@@ -1,6 +1,14 @@
 // 检测站 Worker：只处理 /api/*，其余请求由静态资源直接响应（见 wrangler.jsonc run_worker_first）
 // 隐私：不打日志、不存请求者 IP；缓存 key 与限频 key 都是加盐哈希
-import type { IpApiResponse, ServiceStatus, StatusApiResponse } from '@claude-analysis/shared';
+import {
+  importSigningKey,
+  signSnapshot,
+  snapshotIpOf,
+  type IpApiResponse,
+  type IpInfo,
+  type ServiceStatus,
+  type StatusApiResponse,
+} from '@claude-analysis/shared';
 import { hashIp, isPublicIp, lookupIp, type Secrets } from './ip';
 
 const IP_CACHE_TTL = 86400;
@@ -13,6 +21,21 @@ function reply(body: unknown, status = 200, cacheControl = 'no-store'): Response
   return Response.json(body, { status, headers: { 'cache-control': cacheControl } });
 }
 
+// 结果码签名私钥：每个 isolate 只导入一次
+let signingKey: Promise<CryptoKey> | null = null;
+
+/** 给 IP 属性签名（结果码的 signed 段，不含 IP 本身）；没配私钥或签名失败时不带，不影响 /api/ip 本身 */
+async function sign(data: IpInfo, env: Secrets): Promise<string | undefined> {
+  if (!env.RESULT_CODE_KEY) return undefined;
+  try {
+    signingKey ??= importSigningKey(env.RESULT_CODE_KEY);
+    return await signSnapshot(snapshotIpOf(data), await signingKey);
+  } catch {
+    signingKey = null;
+    return undefined;
+  }
+}
+
 async function handleIp(req: Request, env: Env & Secrets): Promise<Response> {
   const body = await req.json<{ ip?: unknown }>().catch(() => null);
   const ip = typeof body?.ip === 'string' ? body.ip.trim() : '';
@@ -21,8 +44,8 @@ async function handleIp(req: Request, env: Env & Secrets): Promise<Response> {
   const salt = env.IP_HASH_SALT ?? '';
   const cacheKey = salt ? `ip:v${IP_CACHE_VERSION}:${await hashIp(ip, salt)}` : null;
   if (cacheKey) {
-    const cached = await env.IP_CACHE.get(cacheKey, 'json').catch(() => null);
-    if (cached) return reply({ ok: true, data: cached } as IpApiResponse);
+    const cached = await env.IP_CACHE.get<IpInfo>(cacheKey, 'json').catch(() => null);
+    if (cached) return reply({ ok: true, data: cached, signed: await sign(cached, env) } satisfies IpApiResponse);
   }
 
   // 只对要打到上游的请求限频：查自己的出口放宽；查别的 IP（分流导致访问本站与访问 Claude 出口不同）收紧
@@ -36,7 +59,7 @@ async function handleIp(req: Request, env: Env & Secrets): Promise<Response> {
   // KV 免费额度写满时 put 会失败，不影响本次返回
   const ttl = data.registration ? IP_CACHE_TTL : IP_CACHE_TTL_PARTIAL;
   if (cacheKey) await env.IP_CACHE.put(cacheKey, JSON.stringify(data), { expirationTtl: ttl }).catch(() => {});
-  return reply({ ok: true, data } satisfies IpApiResponse);
+  return reply({ ok: true, data, signed: await sign(data, env) } satisfies IpApiResponse);
 }
 
 interface StatuspageSummary {

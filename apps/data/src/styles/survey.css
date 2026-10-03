@@ -1,8 +1,13 @@
 /* 问卷页：token 沿用 global.css，组件规则见 DESIGN.md */
 
+/* 标题、步骤条、问卷、提交后页面、管理页同一列居中，列内文字左对齐 */
+.survey-hero,
 .survey,
-.done {
+.done,
+.manage {
   max-width: 760px;
+  margin-right: auto;
+  margin-left: auto;
 }
 
 /* ---------- 分步 ---------- */
@@ -570,12 +575,21 @@
   font-size: 13px;
 }
 
-.json {
-  overflow-x: auto;
-  margin: 8px 0 0;
-  padding: 12px;
-  border-radius: 8px;
-  background: var(--bg-subtle);
-  font-size: 12px;
-  line-height: 1.5;
+/* ---------- 管理页 ---------- */
+
+.manage__msg {
+  padding: 20px;
+  color: var(--fg-muted);
+}
+
+.manage__body > * + * {
+  margin-top: 16px;
+}
+
+.manage .survey__nav {
+  margin: 8px 0 12px;
+}
+
+.manage .survey__nav .btn--primary {
+  margin-left: auto;
 }

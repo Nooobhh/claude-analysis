@@ -23,6 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+import type { WebrtcLeak } from '@claude-analysis/shared';
 import { isMainlandIp } from '../cnip';
 import { fetchWithTimeout, type Trace } from '../net';
 import { flag, ip, type Detail, type Result } from '../result';
@@ -182,6 +183,16 @@ export async function judgeWebrtc(probes: WebrtcProbe[] | undefined, exits: Trac
   }
   return { status: 'ok', tag: '未泄露', value, reason: 'UDP 出口与 Claude 出口一致', details };
 }
+
+/** 结果码用：WebRTC 判定 → 泄露类型（judgeWebrtc 只在泄露大陆 IP 时标 bad、其他出口时标 warn） */
+export function webrtcLeakOf(probes: WebrtcProbe[] | undefined, r: Result): WebrtcLeak {
+  if (!probes) return 'disabled';
+  return r.status === 'bad' ? 'mainland' : r.status === 'warn' ? 'other' : 'none';
+}
+
+/** 结果码用：DNS 解析器所在国家（去重）；检测失败为 null */
+export const dnsCountriesOf = (probe: DnsProbe | null): string[] | null =>
+  probe ? [...new Set(probe.resolvers.flatMap((r) => (r.cc ? [r.cc.toUpperCase()] : [])))] : null;
 
 export function judgeDns(probe: DnsProbe | null): Result {
   if (!probe) return { status: 'unknown', tag: '检测失败', value: ['—'], reason: 'DNS 检测接口都没有返回' };

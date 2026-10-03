@@ -12,15 +12,15 @@
 ## Agent 行为约定
 - 继承全局 ~/CLAUDE.md 编码原则；不走 /ohaze:ship，按 ROADMAP 当前主线逐项直接开发，每步汇报
 - 检测站是项目主体、长期维护（以后可能迁服务器）；问卷站是短期附属，留在 CF，可能下线
-- 检测站不得依赖问卷站：问卷站下线后检测站照常可用
+- 检测站不得依赖问卷站：问卷站下线后检测站照常可用；下线时删 `apps/detect/src/lib/sites.ts` 与「复制结果码」
 - 前端样式唯一依据 = `DESIGN.md`（Vercel 风中立工具风，Geist 自托管）
 - 可借用 FuckClaude / MyIP（均 MIT）的代码，搬运时在文件头保留原版权声明
 - 当前阶段不做总分 / 加权评分，单项只按客观规则标「正常 / 注意 / 异常」；评分等数据站样本足够后校准
 
 ## 关键文件 / 命令
-- 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），问卷站 `apps/data`（Astro 7）
+- 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），问卷站 `apps/data`（Astro 7 静态页 + CF Worker + D1）
 - 两站共用的类型与样式 token 在 `packages/shared`（样式 `styles/global.css`）；两站互不导入对方代码
-- 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）、`pnpm dev:data`（问卷站 :4322）
+- 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）、`pnpm dev:data`（问卷站 :4322，`/api` 代理到 :8788）、`pnpm dev:data-worker`（问卷站 Worker + 本地 D1 :8788）
 - 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + astro sync + 两套 tsc）、`pnpm run deploy` / `deploy:data`（构建 + 部署检测站 / 问卷站）
 - `pnpm deploy` 是 pnpm 内置命令，部署必须写 `pnpm run deploy`
 - 正常发布 = push main，由 `.github/workflows/deploy.yml` 先部署检测站、再部署问卷站；本地 `pnpm run deploy` 仅应急（页脚会标「含未提交改动」）
@@ -28,8 +28,14 @@
 - Worker 入口 `apps/detect/worker/index.ts`，只接 `/api/*`；配置 `apps/detect/wrangler.jsonc`
 - 问卷：设计 `docs/specs/survey.md`；字段在 shared `survey.ts`，检测快照在 `snapshot.ts`，改题先改 spec
 - 问卷页是 5 步向导，显示条件写在 `apps/data/src/scripts/survey.ts` 的 `update()`，须与 spec 各题条件一致
+- 改题要同步四处：spec、shared `survey.ts`（字段）、shared `validate.ts`（服务端校验）、问卷页
+- 问卷站 Worker 入口 `apps/data/worker/index.ts`，只接 `/api/*`；表结构在 `apps/data/migrations/`
+- 改表结构 = 新增 migration；线上先跑 `wrangler d1 migrations apply claudeban --remote` 再部署
+- 管理页 `apps/data/src/pages/m.astro`（/m#密钥）；接口 GET/PATCH/DELETE `/api/submission`，密钥走 Authorization 头
 - 检测项：ID 在 shared `CHECK_IDS`，文案在 `src/lib/catalog.ts`，判定在 `src/lib/checks/*`，调度在 `src/scripts/detect.ts`
 - Worker secret：`IP_HASH_SALT`、`PROXYCHECK_KEY`、`IPAPI_KEY`（线上均已配置）；可选 `IPINFO_TOKEN`；本地放 `.dev.vars`
+- 结果码签名私钥 = 检测站 secret `RESULT_CODE_KEY`；公钥在 `apps/data/src/lib/result-code.ts`，换钥两边同步
+- 结果码编解码 / 验签在 shared `result-code.ts`；`/api/ip` 顺带返回签名段，检测页本地拼装
 - IP 数据源或 `IpInfo` 结构变了，递增 `worker/index.ts` 的 `IP_CACHE_VERSION`，否则 24h 内读到旧缓存
 - 大陆 IPv4 段 `public/cn-ipv4.bin` 由 `pnpm --filter @claude-analysis/detect gen:cn-ipv4` 从 APNIC 生成
 - `compatibility_date` 不能晚于本地 workerd 版本日期；改 wrangler.jsonc 后跑 `pnpm typecheck` 重生成类型
@@ -41,12 +47,13 @@
 - `/api/ip` 不提供任意 IP 查询：按调用方限频，传入 IP ≠ 请求者 IP 时收紧限额
 - 检测结果 JSON 结构与问卷字段 schema 统一放 `packages/shared`，两站共用，不各自定义
 - 问卷站不读取请求 IP（含 CF-Connecting-IP 等头）、不存 IP，Worker 关日志；防刷不能靠 IP
+- 结果码的 local 段（指纹、泄露结论）只在检测页本地拼装，不得发给检测站服务器
 - 问卷站隐私页 `apps/data/src/pages/privacy.astro` 是对实现的承诺：改收集字段、第三方时同步改它
 
 ## 集成点
 - 检测站：Cloudflare Workers（静态资源 + Worker API + KV 缓存），线上 `claude-analysis.ohaze.workers.dev`
 - 仓库：`github.com/Nooobhh/claude-analysis`（公开）；页脚链接写在 `src/layouts/Base.astro` 的 `REPO_URL`
-- 问卷站：Cloudflare Workers `claudeban.ohaze.workers.dev`，目前只有静态资源；配置 `apps/data/wrangler.jsonc`
+- 问卷站：Cloudflare Workers `claudeban.ohaze.workers.dev`（静态资源 + Worker API + D1 `claudeban`）；配置 `apps/data/wrangler.jsonc`
 - 检测结果由用户复制「结果码」粘贴进问卷，两站之间不直接传数据；问卷站不接收原始 IP
 - 浏览器直连：Anthropic 8 域名 trace、ipip.net / 又拍云（国内 IP）、Cloudflare / Google STUN、Fastly / Surfshark / ipleak（DNS）
 - Worker 访问：proxycheck.io + ipapi.is 并行（记 `flaggedBy` / `typeBy`，分歧前端并排显示），ipinfo.io 兜底；status.claude.com

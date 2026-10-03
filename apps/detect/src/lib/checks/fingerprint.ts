@@ -23,6 +23,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
+import type { LocalSnapshot } from '@claude-analysis/shared';
 import type { Result } from '../result';
 import { CN_TIMEZONES, HKMO_TIMEZONES } from '../regions';
 
@@ -46,6 +47,27 @@ export function readFingerprint(): Fingerprint {
   }
   const languages = (navigator.languages?.length ? [...navigator.languages] : [navigator.language]).filter(Boolean);
   return { timezone, offsetMin: -new Date().getTimezoneOffset(), languages, locale };
+}
+
+/** 结果码用：系统家族（UA 判断，iPadOS 桌面模式会归为 macos） */
+export function osFamily(): LocalSnapshot['fp']['os'] {
+  const ua = navigator.userAgent;
+  if (/Windows/.test(ua)) return 'windows';
+  if (/iPhone|iPad|iPod/.test(ua)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  if (/Mac OS X|Macintosh/.test(ua)) return 'macos';
+  if (/Linux/.test(ua) && !/CrOS/.test(ua)) return 'linux';
+  return 'other';
+}
+
+/** 结果码用：浏览器家族；国产浏览器多是 Chromium 内核，归为 chrome，具体名字另见 cnBrowser */
+export function browserFamily(): LocalSnapshot['fp']['browser'] {
+  const ua = navigator.userAgent;
+  if (/Edg(e|A|iOS)?\//.test(ua)) return 'edge';
+  if (/Firefox|FxiOS/.test(ua)) return 'firefox';
+  if (/Chrome|CriOS|Chromium/.test(ua)) return 'chrome';
+  if (/Safari/.test(ua)) return 'safari';
+  return 'other';
 }
 
 export function formatOffset(min: number): string {

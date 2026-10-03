@@ -12,6 +12,8 @@ export interface Secrets {
   PROXYCHECK_KEY?: string;
   /** ipinfo token，可选；不带时走匿名额度 */
   IPINFO_TOKEN?: string;
+  /** 结果码签名私钥（Ed25519，PKCS#8 base64）；未配置时 /api/ip 不带签名，检测页不能复制结果码 */
+  RESULT_CODE_KEY?: string;
 }
 
 const UPSTREAM_TIMEOUT_MS = 4000;

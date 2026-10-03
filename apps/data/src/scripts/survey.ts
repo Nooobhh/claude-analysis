@@ -1,7 +1,12 @@
-// 问卷页：分步导航、显示条件、多选互斥、按步校验，生成 SurveySubmission。提交接口未上线，提交只在本地预览
+// 问卷页：分步导航、显示条件、多选互斥、按步校验，生成 SurveySubmission 提交到 /api/submissions
 import {
+  IP_TYPE_LABEL,
+  RESULT_CODE_TTL,
+  STATUS_LABEL,
   SURVEY_VERSION,
   TEXT_LIMITS,
+  importVerifyKey,
+  verifyResultCode,
   type AccountsInEnv,
   type AccountSource,
   type AccountStatus,
@@ -11,13 +16,18 @@ import {
   type CardInfo,
   type CardKind,
   type ChatLanguage,
+  type CnClient,
+  type CheckId,
+  type DetectSnapshot,
   type Client,
   type EmailType,
   type EnvBanHistory,
   type ExitType,
+  type IpSource,
   type Jailbreak,
   type LoginMethod,
   type ManualEnv,
+  type NodeSwitch,
   type Os,
   type Payment,
   type PaymentMethod,
@@ -25,8 +35,13 @@ import {
   type Plan,
   type ProxyMode,
   type Refund,
+  type ResultCodeCheck,
+  type ResultCodeError,
   type ReverseProxy,
   type Sharing,
+  type Status,
+  type SubmitError,
+  type SubmitResponse,
   type SurveyAnswers,
   type SurveyEnv,
   type SurveySubmission,
@@ -34,6 +49,8 @@ import {
   type TimezoneSetting,
   type UsageCap,
 } from '@claude-analysis/shared';
+import { countryName } from '../lib/countries';
+import { RESULT_CODE_PUBLIC_KEY } from '../lib/result-code';
 
 const DOMAIN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
 
@@ -85,7 +102,6 @@ function update() {
   sub('detect').hidden = !(envSame === 'same' && envSource === 'detect');
   sub('manual').hidden = !(envSame === 'different' || (envSame === 'same' && envSource === 'manual'));
   q('proxyMode').hidden = one('exitType') === 'abroad';
-  document.querySelector<HTMLElement>('#snap')!.hidden = !text('resultCode');
 
   const regUnknown = checked('registeredAt.unknown');
   for (const n of ['registeredAt.year', 'registeredAt.month']) control(n).disabled = regUnknown;
@@ -197,22 +213,29 @@ function build(): { data: SurveySubmission | null; errors: Map<string, string> }
   // D
   let env: SurveyEnv | undefined;
   const same = pick<'same' | 'different'>('envSame');
+  const exitType = pick<ExitType>('exitType');
   const source = pick<'detect' | 'manual'>('envSource');
   if (same === 'same' && source === 'detect') {
     const token = text('resultCode');
+    const r = codeCheck?.code === token ? codeCheck.result : null;
     if (!token) errors.set('resultCode', '请粘贴检测站的结果码');
-    env = { same: true, source: 'detect', token };
+    else if (!r) errors.set('resultCode', '正在校验结果码，请稍候');
+    else if (!r.ok) errors.set('resultCode', CODE_ERROR[r.error]);
+    // 粘贴时没过期，填到最后一步可能过期了
+    else if (Date.now() / 1000 - r.snapshot.signed.at > RESULT_CODE_TTL) errors.set('resultCode', CODE_ERROR.expired);
+    env = { same: true, exitType, source: 'detect', token };
   } else if (shown(sub('manual'))) {
     const exitRegion = text('exitRegion');
     if (!exitRegion) errors.set('exitRegion', '请选择，或选「不清楚」');
     const manual: ManualEnv = {
       exitRegion: exitRegion === 'unknown' ? null : exitRegion,
-      exitType: pick<ExitType>('exitType'),
       proxyMode: isShown('proxyMode') ? pick<ProxyMode>('proxyMode') : undefined,
       timezone: pick<TimezoneSetting>('timezone'),
       language: pick<SystemLanguage>('language'),
+      nodeSwitch: pick<NodeSwitch>('nodeSwitch'),
+      cnClient: pick<CnClient>('cnClient'),
     };
-    env = { same: same === 'same', source: 'manual', answers: manual };
+    env = { same: same === 'same', exitType, source: 'manual', answers: manual };
   }
 
   const answers: SurveyAnswers = {
@@ -246,6 +269,99 @@ function build(): { data: SurveySubmission | null; errors: Map<string, string> }
   return { data: { v: SURVEY_VERSION, answers, env }, errors };
 }
 
+// ---------- 结果码 ----------
+
+const CODE_ERROR: Record<ResultCodeError, string> = {
+  format: '这不是有效的结果码，请回检测站重新复制',
+  signature: '结果码校验没通过，请回检测站重新复制',
+  expired: '结果码已超过 1 小时，请回检测站重新检测后复制',
+};
+
+/** 不支持 Ed25519 的旧浏览器导入不了公钥：只解析不验签，提交时由服务器校验 */
+const verifyKey = importVerifyKey(RESULT_CODE_PUBLIC_KEY).catch(() => null);
+
+/** 最近一次校验；code 与输入框当前内容一致才算数 */
+let codeCheck: { code: string; result: ResultCodeCheck } | null = null;
+
+const WEBRTC_LABEL = { disabled: '浏览器禁用了 WebRTC', none: '未泄露', mainland: '泄露大陆 IP', other: 'UDP 出口与 Claude 出口不同' };
+const FLAG_LABEL = { vpn: 'VPN', proxy: '代理', tor: 'Tor' } as const;
+const RANK: Record<Status, number> = { bad: 3, warn: 2, unknown: 1, ok: 0 };
+
+/** 几项合并成一行时取最严重的状态 */
+const worst = (...list: Array<Status | undefined>) =>
+  list.reduce<Status | undefined>((a, b) => (b && (!a || RANK[b] > RANK[a]) ? b : a), undefined);
+
+/** 带入数据的展示行：[名称, 值, 状态]，与检测站的检测项对应 */
+function snapshotRows({ signed: { ip }, local }: DetectSnapshot): Array<[string, string, Status | undefined]> {
+  const st = (id: CheckId) => local.status[id];
+  const types = Object.entries(ip.typeBy).map(([src, raw]) => {
+    const hosting = raw === 'hosting' || ip.flaggedBy?.datacenter.includes(src as IpSource);
+    return `${src} ${hosting ? '机房' : (IP_TYPE_LABEL[src as keyof typeof IP_TYPE_LABEL]?.[raw ?? ''] ?? raw)}`;
+  });
+  const flags = ip.flaggedBy && (['vpn', 'proxy', 'tor'] as const).filter((k) => ip.flaggedBy![k].length).map((k) => FLAG_LABEL[k]);
+  const cn = [local.fp.cnFonts ? '中文环境字体' : '', local.fp.cnBrowser ?? '', local.fp.cnDevice ?? ''].filter(Boolean);
+  return [
+    ['Claude 出口地区', local.exitCountry ? countryName(local.exitCountry) : '—', st('ip.region')],
+    ['原生 IP', ip.regCountry ? `登记于${countryName(ip.regCountry)}` : '—', st('ip.native')],
+    ['网络类型', types.join(' · ') || '—', st('ip.type')],
+    ['ASN / 运营商', [ip.asn ? `AS${ip.asn}` : '', ip.org ?? ''].filter(Boolean).join(' · ') || '—', undefined],
+    ['VPN / 代理 / Tor', !flags ? '无数据' : flags.length ? flags.join('、') : '未检测到', worst(st('ip.vpn'), st('ip.proxy'), st('ip.tor'))],
+    ['滥用记录', !ip.flaggedBy ? '无数据' : ip.flaggedBy.abuser.length ? '有记录' : '无记录', st('ip.abuser')],
+    ['风险分', ip.riskScore === null ? '—' : `${ip.riskScore} / 100`, st('ip.score')],
+    ['多域名出口', '', st('exit.consistency')],
+    ['IP 漂移', '', st('exit.drift')],
+    ['系统时区', local.fp.timezone || '—', st('fp.timezone')],
+    ['浏览器语言', local.fp.languages.join(', ') || '—', st('fp.language')],
+    ['中文字体 / 国产浏览器 / 设备', cn.join('、') || '未检测到', worst(st('fp.fonts'), st('fp.browser'), st('fp.device'))],
+    ['WebRTC', WEBRTC_LABEL[local.leak.webrtc] ?? '—', st('leak.webrtc')],
+    ['DNS 解析器', local.leak.dnsCountries?.map(countryName).join('、') || '—', st('leak.dns')],
+  ];
+}
+
+function renderSnapshot() {
+  const r = codeCheck?.result;
+  document.querySelector<HTMLElement>('#snap')!.hidden = !r?.ok;
+  if (!r?.ok) return;
+  const rows = snapshotRows(r.snapshot).map(([label, value, status]) => {
+    const right = el('span', 'check__right');
+    if (value) right.append(el('span', 'check__value', value));
+    if (status) {
+      const tag = el('span', 'tag', STATUS_LABEL[status]);
+      tag.dataset.status = status;
+      right.append(tag);
+    }
+    const main = el('div', 'check__main');
+    main.append(el('span', 'check__name', label), right);
+    const row = el('div', 'check');
+    row.append(main);
+    return row;
+  });
+  document.querySelector('#snap-rows')!.replaceChildren(...rows);
+  document.querySelector('#snap-verified')!.textContent = r.verified ? '签名已校验' : '未校验签名';
+  const { signed, local } = r.snapshot;
+  const time = new Date(signed.at * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  document.querySelector('#snap-foot')!.textContent = [
+    `只带检测结论，不含任何 IP。检测于 ${time}`,
+    `检测站 v${local.version}${local.commit ? `（${local.commit.slice(0, 7)}）` : ''}`,
+    ...(r.verified ? [] : ['当前浏览器无法校验签名，提交时由服务器校验']),
+  ].join(' · ');
+}
+
+async function checkCode() {
+  const code = text('resultCode');
+  if (!code) {
+    codeCheck = null;
+    return renderSnapshot();
+  }
+  const result = await verifyResultCode(code, await verifyKey);
+  // 校验期间输入框又变了，以最新一次为准
+  if (text('resultCode') !== code) return;
+  codeCheck = { code, result };
+  renderSnapshot();
+  if (result.ok) clearError(q('resultCode'));
+  else setError('resultCode', CODE_ERROR[result.error]);
+}
+
 // ---------- 确认页汇总 ----------
 
 /** 一道题的答案文字；没答返回 '' */
@@ -253,7 +369,7 @@ function answerText(fs: HTMLElement): string {
   const id = fs.dataset.q!;
   if (id === 'registeredAt') return checked('registeredAt.unknown') ? '不清楚' : readDate('registeredAt', false);
   if (id === 'bannedAt') return readDate('bannedAt', true);
-  if (id === 'resultCode') return text('resultCode') ? '已粘贴，带入检测站结果' : '';
+  if (id === 'resultCode') return codeCheck?.result.ok ? '已带入检测站结果' : '';
   const own = [...fs.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>('input, select, textarea')].filter(
     (el) => el.closest('[data-q]') === fs,
   );
@@ -327,17 +443,17 @@ function go(i: number, push = true) {
   if (window.scrollY > top) window.scrollTo({ top });
 }
 
-function showErrors(list: Array<[string, string]>) {
+function showErrors(list: Array<[string, string]>, note = `还有 ${list.length} 题没填好`) {
   for (const [id, msg] of list) setError(id, msg);
   const first = steps[current].querySelector<HTMLElement>('[data-invalid]');
   first?.scrollIntoView({ block: 'center' });
   first?.querySelector<HTMLElement>('input:not([disabled]), select:not([disabled]), textarea')?.focus({ preventScroll: true });
-  toast(`还有 ${list.length} 题没填好`);
+  toast(note);
 }
 
 const stepOf = (id: string) => Number(q(id).closest<HTMLElement>('[data-step]')!.dataset.step);
 
-// ---------- 提交后（预览） ----------
+// ---------- 提交 ----------
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function toast(msg: string) {
@@ -348,16 +464,56 @@ function toast(msg: string) {
   toastTimer = setTimeout(() => (node.dataset.show = 'false'), 1600);
 }
 
-function randomKey(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(16));
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
 let dirty = false;
 
-function showDone(data: SurveySubmission) {
-  document.querySelector<HTMLInputElement>('#manage-link')!.value = `${location.origin}/m/${randomKey()}`;
-  document.querySelector('#json')!.textContent = JSON.stringify(data, null, 2);
+const SUBMIT_ERROR: Record<SubmitError, string> = {
+  bad_request: '提交内容格式不对，请刷新页面重试',
+  invalid: '这一题的答案没通过校验，请检查',
+  code_format: CODE_ERROR.format,
+  code_signature: CODE_ERROR.signature,
+  code_expired: CODE_ERROR.expired,
+  code_used: '这个结果码已经提交过一次，请回检测站重新检测后复制',
+  server: '服务器出错了，请稍后再试',
+};
+
+let submitting = false;
+
+async function submit(data: SurveySubmission) {
+  if (submitting) return;
+  submitting = true;
+  nextBtn.disabled = true;
+  nextBtn.textContent = '提交中…';
+  let r: SubmitResponse | null = null;
+  try {
+    const res = await fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    r = (await res.json()) as SubmitResponse;
+  } catch {
+    /* 网络错误，下面统一提示 */
+  }
+  submitting = false;
+  nextBtn.disabled = false;
+  nextBtn.textContent = '提交问卷';
+  if (!r) return toast('网络出错，请稍后再试');
+  if (r.ok) return showDone(r.key);
+
+  // 能对应到某一题的错误，跳回那一步并标在题下面
+  const msg = SUBMIT_ERROR[r.error] ?? SUBMIT_ERROR.server;
+  const id = r.error.startsWith('code_') ? 'resultCode' : r.field;
+  if (id && form.querySelector(`[data-q="${id}"]`)) {
+    go(stepOf(id));
+    showErrors([[id, msg]], msg);
+  } else {
+    toast(msg);
+  }
+}
+
+/** 管理链接：密钥放在 # 后面，不会发给服务器，也不进 Referer */
+function showDone(key: string) {
+  document.querySelector<HTMLInputElement>('#manage-link')!.value = `${location.origin}/m#${key}`;
   form.hidden = true;
   done.hidden = false;
   dirty = false;
@@ -383,7 +539,7 @@ form.addEventListener('change', (e) => {
 form.addEventListener('input', (e) => {
   dirty = true;
   clearError(e.target);
-  if ((e.target as HTMLElement).getAttribute('name') === 'resultCode') update();
+  if ((e.target as HTMLElement).getAttribute('name') === 'resultCode') void checkCode();
 });
 
 const note = control('note') as HTMLTextAreaElement;
@@ -407,7 +563,7 @@ form.addEventListener('submit', (e) => {
     go(first);
     return showErrors([...errors].filter(([id]) => stepOf(id) === first));
   }
-  showDone(data);
+  void submit(data);
 });
 
 prevBtn.addEventListener('click', () => go(current - 1));

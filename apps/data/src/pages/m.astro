@@ -1,0 +1,57 @@
+---
+// 管理链接页 /m#<密钥>：凭密钥更新账号状态、查看答案、删除问卷。密钥只在 # 后面，脚本放在请求头里发给 /api/submission
+import { ACCOUNT_STATUS, REFUND } from '@claude-analysis/shared';
+import BanQuestions from '../components/survey/BanQuestions.astro';
+import Question from '../components/survey/Question.astro';
+import Base from '../layouts/Base.astro';
+import '../styles/survey.css';
+---
+
+<Base title="管理我的问卷 · claude-analysis" description="凭管理链接更新账号状态，或删除整份问卷。">
+  <section class="hero survey-hero">
+    <h1>管理我的问卷</h1>
+    <p>凭这个链接可以更新账号状态，或删除整份问卷。链接就是凭证，不要发给别人。</p>
+  </section>
+
+  <div class="manage">
+    <p class="card manage__msg" id="msg">正在读取问卷…</p>
+
+    <div class="manage__body" id="body" hidden>
+      <section class="card panel">
+        <h2 class="card__title"><span class="card__num">01</span>更新账号状态</h2>
+        <p class="card__desc" id="timeline"></p>
+        <form id="status-form" novalidate>
+          <div class="qs">
+            <Question id="status" num="A1" label="这个账号现在的状态" options={ACCOUNT_STATUS} />
+            <BanQuestions />
+            <Question id="refund" num="C7" label="被封后退款情况" options={REFUND} hidden />
+          </div>
+          <div class="survey__nav">
+            <!-- 脚本读到问卷后才启用：否则会按默认方式 GET 提交 -->
+            <button class="btn btn--primary" id="save" type="submit" disabled>保存</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card panel">
+        <h2 class="card__title"><span class="card__num">02</span>提交的答案</h2>
+        <p class="card__desc">其他答案不能在线修改：改了之后，和提交时的网络环境、检测结果就对不上了。需要改的话，可以删除后重新填写。</p>
+        <dl class="review__list" id="answers"></dl>
+      </section>
+
+      <section class="card panel">
+        <h2 class="card__title"><span class="card__num">03</span>删除问卷</h2>
+        <p class="card__desc">删除后立即从数据库删掉，这个链接也随之失效。Cloudflare 数据库自带的时间点恢复功能会保留最多 30 天的历史，之后彻底消失。</p>
+        <div class="survey__nav">
+          <button class="btn" id="delete" type="button">删除这份问卷</button>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+</Base>
+
+<script>
+  import '../scripts/manage';
+</script>

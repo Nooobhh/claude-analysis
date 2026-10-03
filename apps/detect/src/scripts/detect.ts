@@ -1,17 +1,27 @@
 // 检测页入口：并行跑各项检测，结果到一项渲染一项；全部在浏览器本地完成，
 // 只有 Claude 出口 IP 会发给本站 Worker 查属性（见 lib/checks/ipinfo.ts）
-import { STATUS_LABEL, type CheckId, type Status } from '@claude-analysis/shared';
+import {
+  RESULT_CODE_TTL,
+  STATUS_LABEL,
+  composeResultCode,
+  type CheckId,
+  type LocalSnapshot,
+  type Status,
+} from '@claude-analysis/shared';
 import { ANTHROPIC_DOMAINS, CHECKS, REPORT_GROUPS, anchorOf } from '../lib/catalog';
 import { fetchStatus, judgeLatency, judgeStatus } from '../lib/checks/availability';
 import { getDomestic, judgeConsistency, judgeDomestic, judgeDrift, judgeExit, judgeProxied } from '../lib/checks/exits';
 import {
+  browserFamily,
   checkBrowser,
   checkDevice,
   checkFonts,
   checkLanguage,
   checkLocale,
   checkTimezone,
+  osFamily,
   readFingerprint,
+  type Fingerprint,
 } from '../lib/checks/fingerprint';
 import {
   fetchIpInfo,
@@ -27,7 +37,7 @@ import {
   judgeScore,
   judgeType,
 } from '../lib/checks/ipinfo';
-import { judgeDns, judgeWebrtc, probeDns, probeWebrtc } from '../lib/checks/leaks';
+import { dnsCountriesOf, judgeDns, judgeWebrtc, probeDns, probeWebrtc, webrtcLeakOf } from '../lib/checks/leaks';
 import { flagUrl } from '../lib/flags';
 import { countryName, delay, getTrace, maskIp, type Trace } from '../lib/net';
 import type { Detail, Part, Result } from '../lib/result';
@@ -39,6 +49,21 @@ const API_SAMPLES = 3;
 const results = new Map<CheckId, Result>();
 let showIp = false;
 let runId = 0;
+
+/** 结果码要用、但 results 里没有的原始结论，随检测逐项填入 */
+interface CodeFacts {
+  fp: Fingerprint | null;
+  /** /api/ip 是否查到了 IP 属性 */
+  ipQueried: boolean;
+  /** /api/ip 返回的签名段；IP 属性没查到或服务器没配私钥时为空 */
+  signed?: string;
+  signedAt: number;
+  exitCountry: string | null;
+  webrtc: LocalSnapshot['leak']['webrtc'];
+  dnsCountries: string[] | null;
+}
+const emptyFacts = (): CodeFacts => ({ fp: null, ipQueried: false, signedAt: 0, exitCountry: null, webrtc: 'none', dnsCountries: null });
+let facts = emptyFacts();
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector<T>(sel);
 
@@ -204,6 +229,10 @@ async function run() {
 
   // 环境指纹：同步读取
   const fp = readFingerprint();
+  facts = { ...emptyFacts(), fp };
+  const note = (patch: Partial<CodeFacts>) => {
+    if (my === runId) Object.assign(facts, patch);
+  };
   put('fp.timezone', checkTimezone(fp));
   put('fp.language', checkLanguage(fp));
   put('fp.locale', checkLocale(fp));
@@ -247,6 +276,7 @@ async function run() {
     const target = (c ?? a)?.ip;
     const r = target ? await fetchIpInfo(target) : null;
     const cc = (c ?? a)?.loc || infoOf(r)?.countryCode || undefined;
+    note({ exitCountry: cc ?? null, ipQueried: !!r?.ok, ...(r?.ok && r.signed ? { signed: r.signed, signedAt: Date.now() } : {}) });
     put('ip.region', judgeRegion(cc));
     put('ip.native', judgeNative(r, cc));
     put('ip.type', judgeType(r));
@@ -263,10 +293,15 @@ async function run() {
   });
 
   // 泄露
-  const webrtcP = Promise.all([probeWebrtc(), allTracesP, domesticP]).then(async ([p, all, d]) =>
-    put('leak.webrtc', await judgeWebrtc(p, all.filter((t): t is Trace => t !== null), d)),
-  );
-  const dnsP = probeDns().then((p) => put('leak.dns', judgeDns(p)));
+  const webrtcP = Promise.all([probeWebrtc(), allTracesP, domesticP]).then(async ([p, all, d]) => {
+    const r = await judgeWebrtc(p, all.filter((t): t is Trace => t !== null), d);
+    put('leak.webrtc', r);
+    note({ webrtc: webrtcLeakOf(p, r) });
+  });
+  const dnsP = probeDns().then((p) => {
+    put('leak.dns', judgeDns(p));
+    note({ dnsCountries: dnsCountriesOf(p) });
+  });
 
   const statusP = fetchStatus().then((s) => put('avail.status', judgeStatus(s)));
 
@@ -325,6 +360,35 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+// ---------- 结果码（在本地拼装后复制，不发送任何数据） ----------
+
+/** 检测项报出的国产浏览器 / 设备名 */
+function cnNameOf(id: CheckId): string | null {
+  const r = results.get(id);
+  return r?.status === 'warn' && typeof r.value[0] === 'string' ? r.value[0] : null;
+}
+
+function buildLocal(fp: Fingerprint, btn: HTMLElement): LocalSnapshot {
+  return {
+    version: btn.dataset.version ?? '',
+    commit: btn.dataset.commit ?? '',
+    status: Object.fromEntries([...results].flatMap(([id, r]) => (r.status ? [[id, r.status]] : []))) as LocalSnapshot['status'],
+    exitCountry: facts.exitCountry,
+    fp: {
+      timezone: fp.timezone,
+      offsetMin: fp.offsetMin,
+      languages: fp.languages.slice(0, 3),
+      locale: fp.locale,
+      cnFonts: results.get('fp.fonts')?.status === 'warn',
+      cnBrowser: cnNameOf('fp.browser'),
+      cnDevice: cnNameOf('fp.device'),
+      os: osFamily(),
+      browser: browserFamily(),
+    },
+    leak: { webrtc: facts.webrtc, dnsCountries: facts.dnsCountries },
+  };
+}
+
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function toast(text: string) {
   const el = $('#toast')!;
@@ -345,6 +409,15 @@ $('#toggle-ip')?.addEventListener('click', (e) => {
 });
 
 $('#rerun')?.addEventListener('click', () => void run());
+
+$('#copy-code')?.addEventListener('click', async (e) => {
+  if (results.size < CHECKS.length || !facts.fp) return toast('还在检测，稍等几秒');
+  if (!facts.signed) return toast(facts.ipQueried ? '结果码功能暂时不可用' : '没有查到 IP 属性，生成不了结果码，请重新检测');
+  // 留 1 分钟余量给粘贴
+  if (Date.now() - facts.signedAt > (RESULT_CODE_TTL - 60) * 1000) return toast('检测已超过 1 小时，请重新检测后再复制');
+  const code = composeResultCode(facts.signed, buildLocal(facts.fp, e.currentTarget as HTMLElement));
+  toast((await copyText(code)) ? '已复制结果码，回到问卷粘贴' : '复制失败，请再点一次');
+});
 
 $('#copy')?.addEventListener('click', async () => {
   if (results.size < CHECKS.length) return toast('还在检测，稍等几秒');
