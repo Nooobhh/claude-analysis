@@ -140,3 +140,4 @@ export * from './survey';
 export * from './snapshot';
 export * from './result-code';
 export * from './validate';
+export * from './regions';

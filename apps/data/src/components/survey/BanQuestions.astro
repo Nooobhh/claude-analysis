@@ -1,6 +1,6 @@
 ---
-// 封禁详情 B1–B4：问卷第 1 步与管理页共用；显示条件由页面脚本控制（status ≠ active 时显示，B4 只在 banned 时）
-import { APPEAL, BAN_AFTER, BAN_TRIGGER } from '@claude-analysis/shared';
+// 封禁详情 B1–B5：问卷第 1 步与管理页共用；显示条件由页面脚本控制（status ≠ active 时显示，B4 只在 banned 时）
+import { APPEAL, BAN_AFTER, BAN_REASON, BAN_TRIGGER } from '@claude-analysis/shared';
 import DateSelect from './DateSelect.astro';
 import Question from './Question.astro';
 ---
@@ -16,4 +16,5 @@ import Question from './Question.astro';
   <Question id="banAfter" num="B2" label="使用多久后被封禁" options={BAN_AFTER} />
   <Question id="banTriggers" num="B3" label="被封前后发生了什么" options={BAN_TRIGGER} multi exclusive={['none']} />
   <Question id="appeal" num="B4" label="申诉情况" options={APPEAL} hidden />
+  <Question id="banReason" num="B5" label="封禁通知里写的原因" hint="封禁邮件或登录时的提示里是怎么写的" options={BAN_REASON} />
 </div>

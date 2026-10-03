@@ -7,14 +7,17 @@ import {
   ACCOUNTS_IN_ENV,
   APPEAL,
   BAN_AFTER,
+  BAN_REASON,
   BAN_TRIGGER,
   CARD_KIND,
   CHAT_LANGUAGE,
   CLIENT,
   CN_CLIENT,
+  DISTILL,
   EMAIL_TYPE,
   ENV_BAN_HISTORY,
   EXIT_TYPE,
+  LEGACY_BAN_TRIGGER,
   JAILBREAK,
   LOGIN_METHOD,
   NODE_SWITCH,
@@ -25,8 +28,9 @@ import {
   PROXY_MODE,
   REFUND,
   REVERSE_PROXY,
+  SENSITIVE_USE,
   SHARING,
-  SURVEY_VERSION,
+  SURVEY_VERSIONS,
   SYSTEM_LANGUAGE,
   TEXT_LIMITS,
   TIMEZONE_SETTING,
@@ -38,6 +42,7 @@ import {
   type SurveyAnswers,
   type SurveyEnv,
   type SurveySubmission,
+  type SurveyVersion,
 } from './survey';
 import { CHECK_IDS, STATUS_LABEL, type CheckId, type Status } from './index';
 
@@ -127,7 +132,11 @@ function payment(v: unknown): Payment {
   return { method };
 }
 
-function answers(v: unknown, today: string): SurveyAnswers {
+/** 第 2 版新增的题：第 2 版必答，第 1 版缺省可以，答了照常校验 */
+const added = <T>(version: SurveyVersion, v: unknown, read: () => T): T | undefined => (version === 1 && v === undefined ? undefined : read());
+
+/** legacy：重新校验库里已有的答案时，接受早期问卷的旧选项 */
+function answers(v: unknown, today: string, version: SurveyVersion, legacy = false): SurveyAnswers {
   const a = obj(v, 'answers');
   const status = one(ACCOUNT_STATUS, a.status, 'status');
   const registeredAt = a.registeredAt === null ? null : date(a.registeredAt, 'registeredAt', today, false);
@@ -153,8 +162,13 @@ function answers(v: unknown, today: string): SurveyAnswers {
     registeredAt,
     bannedAt,
     banAfter: banned ? one(BAN_AFTER, a.banAfter, 'banAfter') : undefined,
-    banTriggers: banned ? many(BAN_TRIGGER, a.banTriggers, 'banTriggers', ['none']) : undefined,
+    banTriggers: banned
+      ? legacy
+        ? many({ ...BAN_TRIGGER, ...LEGACY_BAN_TRIGGER }, a.banTriggers, 'banTriggers', ['none', 'unknown'])
+        : many(BAN_TRIGGER, a.banTriggers, 'banTriggers', ['none'])
+      : undefined,
     appeal: status === 'banned' ? one(APPEAL, a.appeal, 'appeal') : undefined,
+    banReason: banned ? added(version, a.banReason, () => one(BAN_REASON, a.banReason, 'banReason')) : undefined,
     source: one(ACCOUNT_SOURCE, a.source, 'source'),
     login,
     emailType,
@@ -172,6 +186,8 @@ function answers(v: unknown, today: string): SurveyAnswers {
     sharing: one(SHARING, a.sharing, 'sharing'),
     reverseProxy: many(REVERSE_PROXY, a.reverseProxy, 'reverseProxy', ['none']),
     jailbreak: one(JAILBREAK, a.jailbreak, 'jailbreak'),
+    distill: added(version, a.distill, () => one(DISTILL, a.distill, 'distill')),
+    sensitiveUse: added(version, a.sensitiveUse, () => many(SENSITIVE_USE, a.sensitiveUse, 'sensitiveUse', ['none', 'decline'])),
     note: optText(a.note, 'note', TEXT_LIMITS.note),
   };
 }
@@ -210,16 +226,19 @@ function run<T>(fn: () => T): Validated<T> {
   }
 }
 
-/** 校验一份提交；today 为服务器当天日期 YYYY-MM-DD。结果码只检查是字符串，验签另做 */
+/** 校验一份提交；today 为服务器当天日期 YYYY-MM-DD。结果码只检查是字符串，验签另做。
+ * 发版时还开着旧页面的人提交的是第 1 版，照样接受、按第 1 版校验 */
 export const validateSubmission = (input: unknown, today: string): Validated<SurveySubmission> =>
   run(() => {
     const s = obj(input, 'submission');
-    if (s.v !== SURVEY_VERSION) throw new Invalid('v');
-    return { v: SURVEY_VERSION, answers: answers(s.answers, today), env: env(s.env) };
+    const v = SURVEY_VERSIONS.find((x) => x === s.v);
+    if (!v) throw new Invalid('v');
+    return { v, answers: answers(s.answers, today, v), env: env(s.env) };
   });
 
-/** 只校验答案部分：管理链接更新状态时，把新状态并进原答案后整份再校验一遍 */
-export const validateAnswers = (input: unknown, today: string): Validated<SurveyAnswers> => run(() => answers(input, today));
+/** 只校验答案部分：管理链接更新状态或补答时，把新值并进原答案后按这份问卷的版本整份再校验一遍 */
+export const validateAnswers = (input: unknown, today: string, version: SurveyVersion): Validated<SurveyAnswers> =>
+  run(() => answers(input, today, version, true));
 
 const WEBRTC: WebrtcLeak[] = ['disabled', 'none', 'mainland', 'other'];
 

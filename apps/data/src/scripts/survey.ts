@@ -19,6 +19,9 @@ import {
   type ChatLanguage,
   type CnClient,
   type CheckId,
+  type BanReason,
+  type Distill,
+  type SensitiveUse,
   type DetectSnapshot,
   type Client,
   type EmailType,
@@ -50,6 +53,7 @@ import {
   type SystemLanguage,
   type TimezoneSetting,
   type UsageCap,
+  unansweredNew,
 } from '@claude-analysis/shared';
 import { countryName } from '../lib/countries';
 import { RESULT_CODE_PUBLIC_KEY } from '../lib/result-code';
@@ -248,6 +252,7 @@ function build(): { data: SurveySubmission | null; errors: Map<string, string> }
     banAfter: isShown('banAfter') ? pick<BanAfter>('banAfter') : undefined,
     banTriggers: isShown('banTriggers') ? pickMany<BanTrigger>('banTriggers') : undefined,
     appeal: isShown('appeal') ? pick<Appeal>('appeal') : undefined,
+    banReason: isShown('banReason') ? pick<BanReason>('banReason') : undefined,
     source: pick<AccountSource>('source'),
     login: pick<LoginMethod>('login'),
     emailType: isShown('emailType') ? pick<EmailType>('emailType') : undefined,
@@ -265,6 +270,8 @@ function build(): { data: SurveySubmission | null; errors: Map<string, string> }
     sharing: pick<Sharing>('sharing'),
     reverseProxy: pickMany<ReverseProxy>('reverseProxy'),
     jailbreak: pick<Jailbreak>('jailbreak'),
+    distill: pick<Distill>('distill'),
+    sensitiveUse: pickMany<SensitiveUse>('sensitiveUse'),
     note: text('note') || undefined,
   };
 
@@ -567,8 +574,16 @@ async function renderSaved() {
     remove.type = 'button';
     const actions = el('span', 'saved__actions');
     actions.append(open, remove);
+    const info = el('span', 'saved__info', `${sub?.createdOn ?? s.savedOn} 提交 · ${status}`);
+    // 第 2 版新增的题没答：提示可以补充，点了才去管理页补，不点不影响
+    const missing = sub ? unansweredNew(sub.answers).length : 0;
+    if (missing) {
+      const add = el('a', 'saved__new', `有 ${missing} 道新题可以补充`);
+      add.href = `/m?add#${s.key}`;
+      info.append(' · ', add);
+    }
     const li = el('li', 'saved__item');
-    li.append(el('span', 'saved__info', `${sub?.createdOn ?? s.savedOn} 提交 · ${status}`), actions);
+    li.append(info, actions);
     remove.addEventListener('click', () => {
       removeSaved(s.key);
       li.remove();

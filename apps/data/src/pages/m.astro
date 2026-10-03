@@ -1,6 +1,6 @@
 ---
 // 管理链接页 /m#<密钥>：凭密钥更新账号状态、查看答案、删除问卷。密钥只在 # 后面，脚本放在请求头里发给 /api/submission
-import { ACCOUNT_STATUS, REFUND } from '@claude-analysis/shared';
+import { ACCOUNT_STATUS, DISTILL, REFUND, SENSITIVE_USE } from '@claude-analysis/shared';
 import BanQuestions from '../components/survey/BanQuestions.astro';
 import Question from '../components/survey/Question.astro';
 import Base from '../layouts/Base.astro';
@@ -32,6 +32,22 @@ import '../styles/survey.css';
           <div class="survey__nav">
             <!-- 脚本读到问卷后才启用：否则会按默认方式 GET 提交 -->
             <button class="btn btn--primary" id="save" type="submit" disabled>保存</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- 第 1 版问卷没答的新题：可以补，也可以不管 -->
+      <section class="card panel" id="supplement" hidden>
+        <h2 class="card__title">补充新题</h2>
+        <p class="card__desc">问卷后来新增了几道题。可以补答，也可以不填，不影响已经提交的问卷。补答只能填一次，之后要改只能删除重填。</p>
+        <p class="card__desc" id="supplement-b5" hidden>新增的「封禁通知里写的原因」在上面「更新账号状态」里补。</p>
+        <form id="supplement-form" novalidate>
+          <div class="qs">
+            <Question id="distill" num="E8" label="有没有用 Claude 的回答训练或微调别的模型（蒸馏）" hint="只用于统计，选「不便回答」也没关系" options={DISTILL} />
+            <Question id="sensitiveUse" num="E9" label="有没有这些用途" options={SENSITIVE_USE} multi exclusive={['none', 'decline']} />
+          </div>
+          <div class="survey__nav">
+            <button class="btn btn--primary" id="supplement-save" type="submit">保存补充</button>
           </div>
         </form>
       </section>

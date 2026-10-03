@@ -1,7 +1,10 @@
 // 问卷字段：值是英文 key（入库 / 公开数据用），标签是中文（表单 / 看板用）。
 // 题目文案、显示条件、校验规则见 docs/specs/survey.md
 
-export const SURVEY_VERSION = 1;
+export const SURVEY_VERSION = 2;
+/** 服务器接受的问卷版本：第 2 版只新增题（B5、E8、E9），第 1 版问卷缺这些题照样有效 */
+export const SURVEY_VERSIONS = [1, 2] as const;
+export type SurveyVersion = (typeof SURVEY_VERSIONS)[number];
 
 /** ISO 3166-1 alpha-2，大写 */
 export type CountryCode = string;
@@ -46,6 +49,10 @@ export const BAN_TRIGGER = {
 } as const;
 export type BanTrigger = keyof typeof BAN_TRIGGER;
 
+/** 0.4.0 上线后改掉的旧选项「不清楚」（当时与其他项互斥）：早期问卷里还存着。重新校验时接受，新问卷不再提供，库里原样不改 */
+export const LEGACY_BAN_TRIGGER = { unknown: '不清楚' } as const;
+export type LegacyBanTrigger = keyof typeof LEGACY_BAN_TRIGGER;
+
 /** 只问仍在封禁的账号；restored 即申诉成功 */
 export const APPEAL = {
   none: '没申诉',
@@ -54,6 +61,18 @@ export const APPEAL = {
   unavailable: '无法申诉',
 } as const;
 export type Appeal = keyof typeof APPEAL;
+
+/** 第 2 版新增；被封过的账号问 */
+export const BAN_REASON = {
+  usage_policy: '违反使用政策（Usage Policy）',
+  terms: '违反服务条款（Terms of Service）',
+  region: '不支持的地区',
+  payment: '付款问题',
+  unspecified: '通知里没写具体原因',
+  no_notice: '没收到通知',
+  forgot: '不记得',
+} as const;
+export type BanReason = keyof typeof BAN_REASON;
 
 // ---------- C 账号来历 ----------
 
@@ -164,6 +183,9 @@ export const EXIT_TYPE = {
   unknown: '不清楚',
 } as const;
 export type ExitType = keyof typeof EXIT_TYPE;
+
+/** 「静态住宅 IP」（residential）0.4.0 上线后改名「静态 IP」（static），是同一个选项：读早期问卷时换成新的，库里原样不改 */
+export const normalizeExitType = (v: string): ExitType => (v === 'residential' ? 'static' : (v as ExitType));
 
 // 以下只在手动填写路径问
 
@@ -281,6 +303,24 @@ export const JAILBREAK = {
 } as const;
 export type Jailbreak = keyof typeof JAILBREAK;
 
+/** 第 2 版新增 */
+export const DISTILL = {
+  no: '没有',
+  yes: '有',
+  decline: '不便回答',
+} as const;
+export type Distill = keyof typeof DISTILL;
+
+/** 第 2 版新增；多选，none、decline 与其他选项互斥 */
+export const SENSITIVE_USE = {
+  security: '网络安全（渗透、漏洞、攻防）',
+  bulk: '批量生成内容',
+  automation: '自动化脚本或爬虫',
+  none: '都没有',
+  decline: '不便回答',
+} as const;
+export type SensitiveUse = keyof typeof SENSITIVE_USE;
+
 // ---------- 汇总 ----------
 
 /** 自由文本长度上限（表单 maxlength 与服务端校验共用） */
@@ -300,8 +340,11 @@ export interface SurveyAnswers {
   // B 封禁详情：status ≠ active 时必填（appeal 只在 banned 时）
   bannedAt?: ApproxDate;
   banAfter?: BanAfter;
-  banTriggers?: BanTrigger[];
+  /** 早期问卷可能有旧选项 LEGACY_BAN_TRIGGER */
+  banTriggers?: Array<BanTrigger | LegacyBanTrigger>;
   appeal?: Appeal;
+  /** 第 2 版新增；status ≠ active 时问 */
+  banReason?: BanReason;
 
   // C 账号来历
   source: AccountSource;
@@ -327,6 +370,10 @@ export interface SurveyAnswers {
   sharing: Sharing;
   reverseProxy: ReverseProxy[];
   jailbreak: Jailbreak;
+  /** 第 2 版新增；第 1 版问卷可能没有 */
+  distill?: Distill;
+  /** 第 2 版新增；第 1 版问卷可能没有 */
+  sensitiveUse?: SensitiveUse[];
 
   // F 补充（选填）
   note?: string;
@@ -334,7 +381,7 @@ export interface SurveyAnswers {
 
 /** 提交到数据站的完整内容 */
 export interface SurveySubmission {
-  v: typeof SURVEY_VERSION;
+  v: SurveyVersion;
   answers: SurveyAnswers;
   /** D 网络环境 */
   env: SurveyEnv;
@@ -352,11 +399,27 @@ export type SubmitError =
 export type SubmitResponse = { ok: true; key: string } | { ok: false; error: SubmitError; field?: string };
 
 /** 管理链接能改的字段：账号状态，以及随状态出现的封禁详情与退款 */
-export const STATUS_FIELDS = ['status', 'bannedAt', 'banAfter', 'banTriggers', 'appeal', 'refund'] as const;
+export const STATUS_FIELDS = ['status', 'bannedAt', 'banAfter', 'banTriggers', 'appeal', 'banReason', 'refund'] as const;
 export type StatusUpdate = Pick<SurveyAnswers, (typeof STATUS_FIELDS)[number]>;
+
+/** 第 1 版问卷可以补答的新题（B5 随状态一起改，不在这里）；只能填空，不能改已答的 */
+export const SUPPLEMENT_FIELDS = ['distill', 'sensitiveUse'] as const;
+export type SupplementUpdate = Pick<SurveyAnswers, (typeof SUPPLEMENT_FIELDS)[number]>;
+/** PATCH /api/submission 的补答请求；不带 supplement 的请求是更新状态（StatusUpdate） */
+export type SupplementRequest = { supplement: SupplementUpdate };
+
+/** 还没答的第 2 版新题：问卷页据此提示可以补充 */
+export function unansweredNew(a: SurveyAnswers): Array<'banReason' | (typeof SUPPLEMENT_FIELDS)[number]> {
+  const list: Array<'banReason' | (typeof SUPPLEMENT_FIELDS)[number]> = [];
+  if (a.status !== 'active' && !a.banReason) list.push('banReason');
+  for (const f of SUPPLEMENT_FIELDS) if (a[f] === undefined) list.push(f);
+  return list;
+}
 
 /** GET / PATCH /api/submission 返回的问卷（凭管理密钥） */
 export interface ManagedSubmission {
+  /** 提交时的问卷版本 */
+  v: SurveyVersion;
   answers: SurveyAnswers;
   /** 入库的网络环境：不含结果码原文 */
   env: { same: true; exitType: ExitType; source: 'detect' } | Extract<SurveyEnv, { source: 'manual' }>;

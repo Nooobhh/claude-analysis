@@ -2,6 +2,8 @@
 // 隐私：不读取请求 IP（不碰 cf-connecting-ip 等请求头，也不读 request.cf），不打日志；承诺见 src/pages/privacy.astro
 import {
   STATUS_FIELDS,
+  SUPPLEMENT_FIELDS,
+  normalizeExitType,
   importVerifyKey,
   validateAnswers,
   validateLocalSnapshot,
@@ -14,13 +16,16 @@ import {
   type StatsResponse,
   type SubmitResponse,
   type SurveyAnswers,
+  type SurveyVersion,
 } from '@claude-analysis/shared';
+import type { BoardData, BoardResponse } from '../src/lib/board';
 import { RESULT_CODE_PUBLIC_KEY } from '../src/lib/result-code';
+import { buildBoard, type Sub } from './board';
 
 /** 一份问卷的 JSON 远小于这个数，超过直接拒收 */
 const MAX_BODY = 32 * 1024;
 
-const reply = (body: SubmitResponse | ManageResponse | DeleteResponse | StatsResponse | { error: string }, status = 200) =>
+const reply = (body: SubmitResponse | ManageResponse | DeleteResponse | StatsResponse | BoardResponse | { error: string }, status = 200) =>
   Response.json(body, { status, headers: { 'cache-control': 'no-store' } });
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -106,6 +111,12 @@ async function handleSubmit(req: Request, env: Env): Promise<Response> {
   return reply({ ok: true, key });
 }
 
+/** 读库里的网络环境：早期问卷的旧选项换成现在的（库里不改） */
+function readEnv(text: string): ManagedSubmission['env'] {
+  const e = JSON.parse(text) as ManagedSubmission['env'];
+  return { ...e, exitType: normalizeExitType(e.exitType) };
+}
+
 // ---------- 已收集份数 ----------
 
 // 每个 isolate 缓存 60 秒，少查 D1（Cache API 在 workers.dev 上不起作用）
@@ -126,10 +137,34 @@ async function handleStats(env: Env): Promise<Response> {
   });
 }
 
+// ---------- 看板：只下发汇总 ----------
+
+// 每个实例缓存 5 分钟；问卷不多，整表读出来在内存里算
+const BOARD_TTL = 5 * 60_000;
+let board: { data: BoardData; at: number } | null = null;
+
+async function handleBoard(env: Env): Promise<Response> {
+  if (!board || Date.now() - board.at > BOARD_TTL) {
+    try {
+      const { results } = await env.DB.prepare('SELECT answers, env, snapshot FROM submissions').all<{ answers: string; env: string; snapshot: string | null }>();
+      const subs: Sub[] = results.map((r) => ({
+        answers: JSON.parse(r.answers) as SurveyAnswers,
+        env: readEnv(r.env),
+        snapshot: r.snapshot ? (JSON.parse(r.snapshot) as DetectSnapshot) : null,
+      }));
+      board = { data: buildBoard(subs, today()), at: Date.now() };
+    } catch {
+      return reply({ ok: false, error: 'server' }, 500);
+    }
+  }
+  return Response.json({ ok: true, data: board.data } satisfies BoardResponse, { headers: { 'cache-control': 'public, max-age=300' } });
+}
+
 // ---------- 管理链接：凭密钥查看、更新状态、删除 ----------
 
 interface Row {
   id: string;
+  v: SurveyVersion;
   answers: string;
   env: string;
   created_on: string;
@@ -140,7 +175,7 @@ interface Row {
 async function findByKey(req: Request, env: Env): Promise<Row | null> {
   const key = /^Bearer ([A-Za-z0-9_-]{22})$/.exec(req.headers.get('authorization') ?? '')?.[1];
   if (!key) return null;
-  return env.DB.prepare('SELECT id, answers, env, created_on, updated_on FROM submissions WHERE key_hash = ?1')
+  return env.DB.prepare('SELECT id, v, answers, env, created_on, updated_on FROM submissions WHERE key_hash = ?1')
     .bind(await sha256(key))
     .first<Row>();
 }
@@ -150,8 +185,9 @@ async function load(row: Row, env: Env): Promise<ManagedSubmission> {
     .bind(row.id)
     .all<{ status: ManagedSubmission['events'][number]['status']; on_date: string }>();
   return {
+    v: row.v,
     answers: JSON.parse(row.answers) as SurveyAnswers,
-    env: JSON.parse(row.env) as ManagedSubmission['env'],
+    env: readEnv(row.env),
     createdOn: row.created_on,
     updatedOn: row.updated_on,
     events: results.map((e) => ({ status: e.status, onDate: e.on_date })),
@@ -166,18 +202,25 @@ async function handleGet(req: Request, env: Env): Promise<Response> {
   return reply({ ok: true, submission: await load(row, env) });
 }
 
-/** 只改账号状态相关字段：并进原答案后整份重新校验（如付费账号被封要答退款）；状态变了记一条事件 */
+/** 两种改法：更新账号状态相关字段，或补答第 2 版新题（只能填空）。并进原答案后按问卷版本整份重新校验；状态变了记一条事件 */
 async function handleUpdate(req: Request, env: Env): Promise<Response> {
   const row = await findByKey(req, env);
   if (!row) return notFound();
   const input = await readJson(req);
-  if (typeof input !== 'object' || input === null) return reply({ ok: false, error: 'bad_request' }, 400);
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return reply({ ok: false, error: 'bad_request' }, 400);
+  const body = input as Record<string, unknown>;
 
   const current = JSON.parse(row.answers) as SurveyAnswers;
   const merged: Record<string, unknown> = { ...current };
-  for (const f of STATUS_FIELDS) merged[f] = (input as Record<string, unknown>)[f];
+  if ('supplement' in body) {
+    const s = body.supplement;
+    if (typeof s !== 'object' || s === null || Array.isArray(s)) return reply({ ok: false, error: 'bad_request' }, 400);
+    for (const f of SUPPLEMENT_FIELDS) if (current[f] === undefined) merged[f] = (s as Record<string, unknown>)[f];
+  } else {
+    for (const f of STATUS_FIELDS) merged[f] = body[f];
+  }
   const date = today();
-  const checked = validateAnswers(merged, date);
+  const checked = validateAnswers(merged, date, row.v);
   if (!checked.ok) return reply({ ok: false, error: 'invalid', field: checked.field }, 400);
   const next = checked.value;
 
@@ -219,6 +262,7 @@ export default {
     const { pathname } = new URL(req.url);
     if (pathname === '/api/submissions' && req.method === 'POST') return handleSubmit(req, env);
     if (pathname === '/api/stats' && req.method === 'GET') return handleStats(env);
+    if (pathname === '/api/board' && req.method === 'GET') return handleBoard(env);
     if (pathname === '/api/submission') {
       if (req.method === 'GET') return handleGet(req, env);
       if (req.method === 'PATCH') return handleUpdate(req, env);

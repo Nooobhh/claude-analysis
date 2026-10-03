@@ -22,6 +22,11 @@
   --unknown: #525252;
   --unknown-bg: #f0f0f0;
 
+  /* 图表色：只用于看板的点（DESIGN.md §2.1） */
+  --c-banned: #dc2626;
+  --c-restored: #f59e0b;
+  --c-active: #c4c4c4;
+
   --font-sans: 'Geist Variable', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui,
     sans-serif;
   --font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -52,6 +57,10 @@
     --bad-bg: rgba(248, 113, 113, 0.15);
     --unknown: #a3a3a3;
     --unknown-bg: #1f1f1f;
+
+    --c-banned: #ef4444;
+    --c-restored: #eab308;
+    --c-active: #4a4a4a;
   }
 }
 
@@ -187,6 +196,19 @@ code {
   display: flex;
   align-items: center;
   gap: 16px;
+}
+
+/* 窄屏：品牌与导航都不换行（DESIGN.md §3.2） */
+@media (max-width: 480px) {
+  .brand {
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .nav {
+    gap: 12px;
+    white-space: nowrap;
+  }
 }
 
 .nav a {

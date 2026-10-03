@@ -656,6 +656,11 @@
   text-decoration-color: var(--fg);
 }
 
+/* 从问卷页「有新题可以补充」跳过来时，卡片标题不被顶部导航挡住 */
+.manage .panel {
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
 .manage__saved {
   color: var(--fg-muted);
   font-size: 13px;

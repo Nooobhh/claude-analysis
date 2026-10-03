@@ -28,11 +28,15 @@
 - Worker 入口 `apps/detect/worker/index.ts`，只接 `/api/*`；配置 `apps/detect/wrangler.jsonc`
 - 问卷：设计 `docs/specs/survey.md`；字段在 shared `survey.ts`，检测快照在 `snapshot.ts`，改题先改 spec
 - 问卷页是 5 步向导，显示条件写在 `apps/data/src/scripts/survey.ts` 的 `update()`，须与 spec 各题条件一致
+- 问卷第 2 版（`SURVEY_VERSION`）只加题：新题按版本校验，第 1 版缺新题仍有效；补答只能填空，见 survey.md「版本与补答」
+- 看板：页面 `src/pages/board.astro` + `src/scripts/board.ts`；`/api/board` 在 `worker/board.ts` 汇总，规则见 `docs/specs/board.md`
+- 看板的环境 / 行为判定只写在 `worker/board.ts`，改规则先改 board.md；下发结构在 `src/lib/board.ts`
 - 改题要同步四处：spec、shared `survey.ts`（字段）、shared `validate.ts`（服务端校验）、问卷页
 - 问卷站 Worker 入口 `apps/data/worker/index.ts`，只接 `/api/*`；表结构在 `apps/data/migrations/`
 - 改表结构 = 新增 migration；线上先跑 `wrangler d1 migrations apply claudeban --remote` 再部署
 - 管理页 `apps/data/src/pages/m.astro`（/m#密钥）；接口 GET/PATCH/DELETE `/api/submission`，密钥走 Authorization 头
 - 检测项：ID 在 shared `CHECK_IDS`，文案在 `src/lib/catalog.ts`，判定在 `src/lib/checks/*`，调度在 `src/scripts/detect.ts`
+- 支持地区列表在 shared `regions.ts`（检测站判定出口、问卷站看板判定手动出口共用）
 - Worker secret：`IP_HASH_SALT`、`PROXYCHECK_KEY`、`IPAPI_KEY`（线上均已配置）；可选 `IPINFO_TOKEN`；本地放 `.dev.vars`
 - 结果码签名私钥 = 检测站 secret `RESULT_CODE_KEY`；公钥在 `apps/data/src/lib/result-code.ts`，换钥两边同步
 - 结果码编解码 / 验签在 shared `result-code.ts`；`/api/ip` 顺带返回签名段，检测页本地拼装
@@ -50,6 +54,7 @@
 - 结果码的 local 段（指纹、泄露结论）只在检测页本地拼装，不得发给检测站服务器
 - 问卷站隐私页 `apps/data/src/pages/privacy.astro` 是对实现的承诺：改收集字段、第三方时同步改它
 - 问卷站浏览器存储只存管理密钥（localStorage `claudeban.saved`，见 `src/lib/saved.ts`），不存答案
+- 看板只下发汇总份数，`/api/board` 不得返回任何单份问卷的字段；散点图的点由前端按份数生成
 
 ## 集成点
 - 检测站：Cloudflare Workers（静态资源 + Worker API + KV 缓存），线上 `claude-analysis.ohaze.workers.dev`

@@ -1,19 +1,23 @@
-// 管理链接页：密钥取自 location.hash，放在 Authorization 头里发给 /api/submission；页面不往浏览器存任何东西
+// 管理链接页：密钥取自 location.hash，放在 Authorization 头里发给 /api/submission；页面不往浏览器存任何东西。
+// 第 1 版问卷没答的新题可以补（只能填空，不强制）：B5 随状态一起，E8 / E9 在「补充新题」里
 import {
   ACCOUNT_SOURCE,
   ACCOUNT_STATUS,
   ACCOUNTS_IN_ENV,
   APPEAL,
   BAN_AFTER,
+  BAN_REASON,
   BAN_TRIGGER,
   CARD_KIND,
   CHAT_LANGUAGE,
   CLIENT,
   CN_CLIENT,
+  DISTILL,
   EMAIL_TYPE,
   ENV_BAN_HISTORY,
   EXIT_TYPE,
   JAILBREAK,
+  LEGACY_BAN_TRIGGER,
   LOGIN_METHOD,
   NODE_SWITCH,
   OS,
@@ -23,22 +27,29 @@ import {
   PROXY_MODE,
   REFUND,
   REVERSE_PROXY,
+  SENSITIVE_USE,
   SHARING,
+  SUPPLEMENT_FIELDS,
   SYSTEM_LANGUAGE,
   TIMEZONE_SETTING,
   USAGE_CAP,
   type AccountStatus,
   type Appeal,
   type BanAfter,
+  type BanReason,
   type BanTrigger,
   type CardInfo,
   type DeleteResponse,
+  type Distill,
   type ManageResponse,
   type ManagedSubmission,
   type Payment,
   type Plan,
   type Refund,
+  type SensitiveUse,
   type StatusUpdate,
+  type SupplementRequest,
+  type SurveyVersion,
 } from '@claude-analysis/shared';
 import { countryName } from '../lib/countries';
 import { addSaved, removeSaved } from '../lib/saved';
@@ -59,6 +70,7 @@ const select = (name: string) => form.elements.namedItem(name) as HTMLSelectElem
 
 let plan: Plan = 'free';
 let registeredAt: string | null = null;
+let version: SurveyVersion = 2;
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function toast(text: string) {
@@ -126,8 +138,9 @@ function answerRows({ answers: a, env: e }: ManagedSubmission): Array<[string, s
     ['注册时间', a.registeredAt ?? '不清楚'],
     ['封禁日期', a.bannedAt],
     ['使用多久后被封禁', a.banAfter && BAN_AFTER[a.banAfter]],
-    ['被封前后发生了什么', a.banTriggers?.map((t) => BAN_TRIGGER[t]).join('、')],
+    ['被封前后发生了什么', a.banTriggers?.map((t) => ({ ...BAN_TRIGGER, ...LEGACY_BAN_TRIGGER })[t]).join('、')],
     ['申诉情况', a.appeal && APPEAL[a.appeal]],
+    ['封禁通知里写的原因', a.banReason && BAN_REASON[a.banReason]],
     ['账号来源', ACCOUNT_SOURCE[a.source]],
     ['登录方式', LOGIN_METHOD[a.login]],
     ['邮箱类型', a.emailType && `${EMAIL_TYPE[a.emailType]}${a.emailDomain ? `（@${a.emailDomain}）` : ''}`],
@@ -153,6 +166,8 @@ function answerRows({ answers: a, env: e }: ManagedSubmission): Array<[string, s
     ['谁在用这个账号', SHARING[a.sharing]],
     ['CPA 或其他逆向 / 反代软件', a.reverseProxy.map((r) => REVERSE_PROXY[r]).join('、')],
     ['破限或 NSFW', JAILBREAK[a.jailbreak]],
+    ['蒸馏', a.distill && DISTILL[a.distill]],
+    ['用途', a.sensitiveUse?.map((u) => SENSITIVE_USE[u]).join('、')],
     ['补充', a.note],
   ];
   return rows.filter((r): r is [string, string] => !!r[1]);
@@ -170,12 +185,40 @@ function prefill({ answers: a }: ManagedSubmission) {
   check('banAfter', a.banAfter ? [a.banAfter] : []);
   check('banTriggers', a.banTriggers ?? []);
   check('appeal', a.appeal ? [a.appeal] : []);
+  check('banReason', a.banReason ? [a.banReason] : []);
   check('refund', a.refund ? [a.refund] : []);
+}
+
+/** 题目标「选填」：第 1 版问卷的新题 */
+function markOptional(fs: HTMLElement, optional: boolean) {
+  const legend = fs.querySelector('legend')!;
+  let meta = legend.querySelector<HTMLElement>('[data-added]');
+  if (optional && !meta) {
+    meta = el('span', 'q__meta', '选填');
+    meta.dataset.added = '';
+    legend.insertBefore(meta, legend.querySelector('.q__hint'));
+  }
+  if (!optional) meta?.remove();
+}
+
+const supplement = document.querySelector<HTMLElement>('#supplement')!;
+const supForm = document.querySelector<HTMLFormElement>('#supplement-form')!;
+const supQ = (id: string) => supForm.querySelector<HTMLElement>(`[data-q="${id}"]`)!;
+
+/** 补充新题：只列还没答的；都答了就不显示 */
+function renderSupplement({ answers: a }: ManagedSubmission) {
+  const missing = SUPPLEMENT_FIELDS.filter((f) => a[f] === undefined);
+  for (const f of SUPPLEMENT_FIELDS) supQ(f).hidden = !missing.includes(f);
+  supplement.hidden = !missing.length;
+  document.querySelector<HTMLElement>('#supplement-b5')!.hidden = !(a.status !== 'active' && !a.banReason);
 }
 
 function render(sub: ManagedSubmission) {
   plan = sub.answers.plan;
   registeredAt = sub.answers.registeredAt;
+  version = sub.v;
+  markOptional(q('banReason'), version === 1);
+  renderSupplement(sub);
   document.querySelector('#timeline')!.textContent = `状态记录：${sub.events
     .map((e) => `${e.onDate} ${ACCOUNT_STATUS[e.status]}`)
     .join(' → ')}`;
@@ -238,6 +281,9 @@ form.addEventListener('submit', async (e) => {
     else bannedAt = d ? `${y}-${m}-${d}` : `${y}-${m}`;
   }
   const banTriggers = shown(q('banTriggers')) ? many<BanTrigger>('banTriggers') : undefined;
+  // 第 1 版问卷没问过 B5，补不补都行
+  const banReason = shown(q('banReason')) ? one<BanReason>('banReason') || undefined : undefined;
+  if (shown(q('banReason')) && !banReason && version !== 1) errors.push(['banReason', '请选择一项']);
   if (banTriggers && !banTriggers.length) errors.push(['banTriggers', '至少选一项']);
   const payload: StatusUpdate = {
     status: status!,
@@ -245,6 +291,7 @@ form.addEventListener('submit', async (e) => {
     banAfter: pick<BanAfter>('banAfter'),
     banTriggers,
     appeal: pick<Appeal>('appeal'),
+    banReason,
     refund: pick<Refund>('refund'),
   };
   if (errors.length) {
@@ -265,6 +312,37 @@ form.addEventListener('submit', async (e) => {
     return setError('bannedAt', `日期不对：不能晚于今天${registeredAt ? `，也不能早于注册时间 ${registeredAt}` : ''}，日期要真实存在`);
   }
   if (r.field && form.querySelector(`[data-q="${r.field}"]`)) return setError(r.field, '这一题的答案没通过校验，请检查');
+  toast('保存失败，请稍后再试');
+});
+
+// 补充新题：答了哪题就补哪题，一题都没答不提交
+supForm.addEventListener('change', (e) => {
+  const t = e.target as HTMLInputElement;
+  if (t.type === 'checkbox' && t.checked) {
+    const exclusive = 'exclusive' in t.dataset;
+    supForm.querySelectorAll<HTMLInputElement>(`input[type="checkbox"][name="${t.name}"]`).forEach((i) => {
+      if (i !== t && (exclusive || 'exclusive' in i.dataset)) i.checked = false;
+    });
+  }
+});
+
+supForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const checkedOf = (name: string) => [...supForm.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)].map((i) => i.value);
+  const distill = shown(supQ('distill')) ? (checkedOf('distill')[0] as Distill | undefined) : undefined;
+  const uses = shown(supQ('sensitiveUse')) ? (checkedOf('sensitiveUse') as SensitiveUse[]) : [];
+  const payload: SupplementRequest = { supplement: { distill, sensitiveUse: uses.length ? uses : undefined } };
+  if (!distill && !uses.length) return toast('还没选任何答案');
+  const btn = document.querySelector<HTMLButtonElement>('#supplement-save')!;
+  btn.disabled = true;
+  const r = await api<ManageResponse>('PATCH', payload);
+  btn.disabled = false;
+  if (!r) return toast('网络出错，请稍后再试');
+  if (r.ok) {
+    render(r.submission);
+    return toast('已补充，谢谢');
+  }
+  if (r.error === 'not_found') return showMessage('没有找到这份问卷：可能已经删除。');
   toast('保存失败，请稍后再试');
 });
 
@@ -300,6 +378,10 @@ async function init() {
   } else {
     render(r.submission);
     rememberHere();
+    // 从问卷页「有新题可以补充」点进来：跳到要补的地方
+    if (new URLSearchParams(location.search).has('add')) {
+      (supplement.hidden ? form : supplement).scrollIntoView({ block: 'start' });
+    }
   }
 }
 
