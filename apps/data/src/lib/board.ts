@@ -21,6 +21,8 @@ export interface BoardDim {
   multi?: boolean;
   /** 选项是国家代码，页面换成中文名 */
   country?: boolean;
+  /** 只有被封的账号答的题：展示分布（占 base 个被封账号的比例），不算被封占比 */
+  base?: number;
   rows: BoardRow[];
 }
 
@@ -30,10 +32,15 @@ export interface BoardGroup {
   dims: BoardDim[];
 }
 
-/** 用户行为 / 使用环境：scoped = 默认范围（环境干净 / 行为干净），all = 全部样本 */
+export interface BoardPart {
+  total: Counts;
+  groups: BoardGroup[];
+}
+
+/** 网络环境 / 使用习惯：scoped = 默认范围（行为干净 / 环境干净），all = 全部样本 */
 export interface BoardSection {
-  scoped: { total: Counts; groups: BoardGroup[] };
-  all: { total: Counts; groups: BoardGroup[] };
+  scoped: BoardPart;
+  all: BoardPart;
 }
 
 /** 四象限：c / p = 环境干净 / 有问题，c / v = 行为干净 / 有违规项 */
@@ -53,14 +60,21 @@ export interface BoardData {
   quad: Record<QuadKey, Counts>;
   /** 环境或行为无法判定、没进四象限的份数 */
   undetermined: number;
-  behavior: BoardSection;
-  environment: BoardSection;
+  /** 账号情况（A+B+C）：全部样本；groups = 注册、账号来历 */
+  account: BoardPart;
+  /** 只有被封的账号答的题（B3 / B4 / C7）的分布 */
+  bannedDists: BoardDim[];
+  network: BoardSection;
+  usage: BoardSection;
   /** 按封禁月份（YYYY-MM），月份连续 */
   timeline: Array<{ month: string; banned: number; restored: number }>;
   byEnv: PairDim[];
 }
 
 export type BoardResponse = { ok: true; data: BoardData } | { ok: false; error: 'server' };
+
+/** 下发结构的版本：浏览器会缓存 /api/board 5 分钟，改了结构就加 1，页面请求的地址随之变化，不会读到旧结构 */
+export const BOARD_VERSION = 2;
 
 /** 少于这个份数标「低样本」 */
 export const MIN_N = 30;

@@ -1,4 +1,4 @@
-/* 看板页：DESIGN.md §3.2、§4.15–4.18。不用卡片，各部分之间留白 + 细线；全页只用「点」一种图形 */
+/* 看板页：DESIGN.md §3.2、§4.15–4.19。不用卡片，各部分之间留白 + 细线；全页只用「点」一种图形 */
 
 .board-hero,
 .board,
@@ -6,6 +6,115 @@
   max-width: 980px;
   margin-right: auto;
   margin-left: auto;
+}
+
+/* ---------- 目录 §4.19：宽屏左侧固定，窄屏变成顶部横条 ---------- */
+
+.board-layout {
+  --toc-offset: calc(var(--header-h) + 52px);
+}
+
+.board-layout [id] {
+  scroll-margin-top: var(--toc-offset);
+}
+
+.toc__title {
+  margin-bottom: 8px;
+  color: var(--fg-subtle);
+  font-size: 12px;
+}
+
+.toc__link {
+  display: block;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid transparent;
+  color: var(--fg-muted);
+  font-size: 13px;
+  text-decoration: none;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.toc__link:hover {
+  color: var(--fg);
+}
+
+.toc__link[aria-current],
+.toc__link[data-parent] {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.toc__link[aria-current] {
+  border-left-color: var(--fg);
+}
+
+.toc__link--sub {
+  padding-left: 24px;
+  font-size: 12px;
+}
+
+@media (min-width: 1100px) {
+  .board-layout {
+    --toc-offset: calc(var(--header-h) + 16px);
+    display: grid;
+    grid-template-columns: 160px minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .toc {
+    position: sticky;
+    top: calc(var(--header-h) + 32px);
+    align-self: start;
+    max-height: calc(100vh - var(--header-h) - 64px);
+    margin-top: 48px;
+    overflow-y: auto;
+    border-left: 1px solid var(--border);
+  }
+
+  .toc__link {
+    margin-left: -1px;
+  }
+}
+
+@media (max-width: 1099px) {
+  /* 窄屏：顶部横条，只列四个大块 */
+  .toc {
+    position: sticky;
+    top: var(--header-h);
+    z-index: 5;
+    display: flex;
+    gap: 4px;
+    margin: 0 calc(var(--gutter) * -1);
+    padding: 0 var(--gutter);
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    scrollbar-width: none;
+  }
+
+  .toc[hidden] {
+    display: none;
+  }
+
+  .toc__title,
+  .toc__link--sub {
+    display: none;
+  }
+
+  .toc__item {
+    flex: none;
+  }
+
+  .toc__link {
+    padding: 10px 8px;
+    border-left: 0;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+  }
+
+  .toc__link[data-parent] {
+    border-bottom-color: var(--fg);
+  }
 }
 
 .board-meta {
@@ -300,6 +409,10 @@
 
   .note__big {
     font-size: 26px;
+  }
+
+  .note__big--empty {
+    font-size: 15px;
   }
 }
 

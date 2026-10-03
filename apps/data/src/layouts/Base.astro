@@ -39,11 +39,12 @@ const { title, description, current } = Astro.props;
           claude-analysis
         </a>
         <nav class="nav">
-          <a href="/" aria-current={current === 'survey' ? 'page' : undefined}>问卷</a>
-          <a href="/board" aria-current={current === 'board' ? 'page' : undefined}>看板</a>
           <!-- 新标签页打开，避免离开问卷丢掉已填的答案 -->
-          <a href={DETECT_URL} target="_blank" rel="noopener">环境检测</a>
-          <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>隐私</a>
+          <a href={DETECT_URL} target="_blank" rel="noopener">Claude 检测</a>
+          <a href="/" aria-current={current === 'survey' ? 'page' : undefined}>问卷</a>
+          <a href="/board" aria-current={current === 'board' ? 'page' : undefined}>数据汇总</a>
+          <!-- 窄屏放不下，只留页脚的「隐私说明」 -->
+          <a class="nav__wide" href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>隐私</a>
         </nav>
       </div>
     </header>

@@ -1,6 +1,6 @@
 ---
 // 看板 /board：整页围绕一张散点图，一个点 = 一份问卷；数据来自 /api/board（只有份数，没有单份问卷）。
-// 样式见 DESIGN.md §3.2、§4.15–4.18，统计口径与分组规则见 docs/specs/board.md
+// 样式见 DESIGN.md §3.2、§4.15–4.19，统计口径与分组规则见 docs/specs/board.md
 import { ENV_PASS_SCORE, FINGERPRINT_WARN, NETWORK_WARN } from '@claude-analysis/shared';
 import Base from '../layouts/Base.astro';
 import '../styles/board.css';
@@ -12,6 +12,10 @@ const rules = (warn: typeof NETWORK_WARN) =>
 ---
 
 <Base title="问卷数据汇总 · claude-analysis" description="按使用环境和用户行为分组，比较 Claude 账号被封的情况。只展示汇总，不展示单份问卷。" current="board">
+  <div class="board-layout">
+  <!-- 目录：数据读到后由脚本按实际渲染的部分生成 -->
+  <nav class="toc" id="toc" aria-label="页面目录" hidden></nav>
+  <div class="board-main">
   <section class="hero board-hero">
     <h1>问卷数据汇总</h1>
     <p>
@@ -22,7 +26,7 @@ const rules = (warn: typeof NETWORK_WARN) =>
 
   <div class="board" id="board" hidden></div>
 
-  <details class="rules">
+  <details class="rules" id="rules">
     <summary>怎么判定「环境干净」「行为干净」</summary>
     <ul>
       <li>环境干净：网络环境、设备指纹都通过。两类各从 100 分起扣，扣到 {ENV_PASS_SCORE} 分以下不通过；只显示通过与否，不显示分数。账号环境、支付环境只展示，不进判定。</li>
@@ -39,6 +43,8 @@ const rules = (warn: typeof NETWORK_WARN) =>
       <li>问卷是自愿填写的，被封的人更愿意来填：占比只适合在组与组之间比较，不代表实际封号率。</li>
     </ul>
   </details>
+  </div>
+  </div>
 </Base>
 
 <script>

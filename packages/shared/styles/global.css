@@ -209,6 +209,10 @@ code {
     gap: 12px;
     white-space: nowrap;
   }
+
+  .nav__wide {
+    display: none;
+  }
 }
 
 .nav a {

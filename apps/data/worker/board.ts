@@ -1,26 +1,28 @@
-// 看板汇总：把每份问卷判成「环境干净 / 有问题 / 无法判定」「行为干净 / 有违规项 / 无法判定」，再按维度数份数。
-// 规则与 docs/specs/board.md「环境判定」「行为判定」一致，改规则先改 spec；网络环境、设备指纹的扣分规则在 shared scoring.ts，
-// 与检测站结论卡共用。只在服务器上跑，下发的只有份数
+// 看板汇总：把每份问卷判成「环境干净 / 有问题 / 无法判定」「行为干净 / 有违规项 / 无法判定」（用于散点图），
+// 再按账号情况 / 网络环境 / 使用习惯三块数份数。规则与 docs/specs/board.md 一致，改规则先改 spec；
+// 网络环境、设备指纹的扣分规则在 shared scoring.ts，与检测站结论卡共用。只在服务器上跑，下发的只有份数
 import {
   ACCOUNT_SOURCE,
   ACCOUNTS_IN_ENV,
+  APPEAL,
   BAN_AFTER,
   BAN_REASON,
+  BAN_TRIGGER,
   CARD_KIND,
-  CLIENT,
-  DISTILL,
+  CHAT_LANGUAGE,
+  EMAIL_TYPE,
   ENV_BAN_HISTORY,
   ENV_PASS_SCORE,
-  JAILBREAK,
+  LEGACY_BAN_TRIGGER,
   LOGIN_METHOD,
   PAYMENT_METHOD,
   PHONE_VERIFY,
   PLAN,
-  REVERSE_PROXY,
-  SENSITIVE_USE,
+  REFUND,
   SHARING,
   SUPPORTED_COUNTRIES,
   USAGE_CAP,
+  ZH_SPEAKING,
   judgeFingerprint,
   judgeNetwork,
   type AccountStatus,
@@ -30,10 +32,9 @@ import {
   type EnvVerdict,
   type ManagedSubmission,
   type ManualEnv,
-  type Status,
   type SurveyAnswers,
 } from '@claude-analysis/shared';
-import type { BoardData, BoardDim, BoardGroup, BoardRow, Counts, PairDim, QuadKey } from '../src/lib/board';
+import type { BoardData, BoardDim, BoardGroup, BoardPart, BoardRow, Counts, PairDim, QuadKey } from '../src/lib/board';
 
 export interface Sub {
   answers: SurveyAnswers;
@@ -71,7 +72,7 @@ export function fingerprintOf(s: Sub): Tri {
   return 100 - manualFpPoints(m) < ENV_PASS_SCORE ? 'problem' : 'clean';
 }
 
-/** 环境干净 = 网络环境、设备指纹都通过；账号环境、支付环境只展示，不进判定 */
+/** 环境干净 = 网络环境、设备指纹都通过；账号、支付相关的题只在账号情况里展示，不进判定 */
 export const envOf = (s: Sub): Tri => combine([networkOf(s), fingerprintOf(s)]);
 
 /** 违规项：买号或拼车、多人共用、反代、破限、蒸馏；没问到的题（第 1 版没有 E8）跳过 */
@@ -96,55 +97,27 @@ const add = (c: Counts, status: AccountStatus) => {
 interface DimDef {
   q: string;
   title: string;
-  /** 选项与显示顺序；country 维度为空，按份数排 */
+  /** 选项与显示顺序；country / ordered 维度为空 */
   labels: Record<string, string>;
-  /** 这份问卷选了哪些选项；没问到 / 不适用返回 null */
+  /** 这份问卷选了哪些选项；没问到 / 不适用 / 不计入返回 null */
   pick: (s: Sub) => string[] | null;
   multi?: boolean;
+  /** 选项是国家代码：按份数排，少于 RARE 份合并为「其他」 */
   country?: boolean;
+  /** 选项按 key 排序（unknown 放最后），label 由它生成 */
+  ordered?: (key: string) => string;
+  /** 只有被封的账号答：展示分布 */
+  dist?: boolean;
+}
+
+interface GroupDef {
+  title: string;
+  desc?: string;
+  dims: DimDef[];
 }
 
 const one = (v: string | undefined | null) => (v ? [v] : null);
-
-const SEVERITY: Record<Status, number> = { unknown: 0, ok: 1, warn: 2, bad: 3 };
-/** 合成维度的三档 */
-const LEVEL = { ok: '正常', warn: '有注意项', bad: '有异常项' };
-
-/** 几个检测项合成一个维度，取最严重的一项；manual 给出手动样本对应的档位。设备指纹类遇到「检测设备不是使用设备」不计入 */
-function levelDim(
-  q: string,
-  title: string,
-  ids: CheckId[],
-  opts: { fingerprint?: boolean; manual?: (m: ManualEnv) => Status | null } = {},
-): DimDef {
-  return {
-    q,
-    title,
-    labels: LEVEL,
-    pick: (s) => {
-      if (s.snapshot) {
-        if (opts.fingerprint && !fpUsable(s)) return null;
-        const worst = ids.map((id) => s.snapshot!.local.status[id]).reduce<Status | undefined>((a, b) => (b && (!a || SEVERITY[b] > SEVERITY[a]) ? b : a), undefined);
-        // 全是「未知」不计入
-        return worst && worst !== 'unknown' ? [worst] : null;
-      }
-      const m = manual(s);
-      return one(m && opts.manual ? opts.manual(m) : null);
-    },
-  };
-}
-
-const PASS = { clean: '通过', problem: '不通过' };
-const verdictDim = (title: string, judge: (s: Sub) => Tri): DimDef => ({
-  q: '判定',
-  title,
-  labels: PASS,
-  pick: (s) => {
-    const v = judge(s);
-    return v === 'unknown' ? null : [v];
-  },
-});
-
+const statusOf = (s: Sub, id: CheckId) => s.snapshot?.local.status[id];
 const cardOf = (s: Sub): CardInfo | null => {
   const p = s.answers.payment;
   if (p?.method === 'card') return p.card;
@@ -154,94 +127,32 @@ const cardOf = (s: Sub): CardInfo | null => {
 
 const EXIT_SHORT = { airport: '机场', vps: '自建 VPS', static: '静态 IP', vpn: '商业 VPN', mobile_roaming: '境外手机卡流量', abroad: '人在海外', unknown: '不清楚' };
 
-const BEHAVIOR: Array<{ title: string; desc: string; dims: DimDef[] }> = [
+// ---------- 账号情况（A+B+C）：全部样本 ----------
+
+/** 注册时间按年；不清楚单列 */
+const yearOf = (ym: string | null) => (ym ? ym.slice(0, 4) : 'unknown');
+
+const ACCOUNT: GroupDef[] = [
   {
-    title: '违规项',
-    desc: '判定「行为干净」用的 5 题',
+    title: '注册',
     dims: [
-      { q: 'C1', title: '账号来源', labels: ACCOUNT_SOURCE, pick: (s) => [s.answers.source] },
-      { q: 'E5', title: '谁在用', labels: SHARING, pick: (s) => [s.answers.sharing] },
-      { q: 'E6', title: '逆向或反代', labels: REVERSE_PROXY, pick: (s) => s.answers.reverseProxy, multi: true },
-      { q: 'E7', title: '破限或 NSFW', labels: JAILBREAK, pick: (s) => [s.answers.jailbreak] },
-      { q: 'E8', title: '蒸馏', labels: DISTILL, pick: (s) => one(s.answers.distill) },
-    ],
-  },
-  {
-    title: '异常行为',
-    desc: '单独标记，不算违规项',
-    dims: [
-      { q: 'C8', title: '同环境账号数', labels: ACCOUNTS_IN_ENV, pick: (s) => [s.answers.accountsInEnv] },
       {
-        q: 'C6',
-        title: '代充',
-        labels: { reseller: '代充', other: '其他付款方式或 Free' },
-        pick: (s) => [s.answers.payment?.method === 'reseller' ? 'reseller' : 'other'],
+        q: 'A2',
+        title: '注册时间',
+        labels: {},
+        ordered: (k) => (k === 'unknown' ? '不清楚' : `${k} 年`),
+        pick: (s) => [yearOf(s.answers.registeredAt)],
       },
     ],
   },
   {
-    title: '用法与用途',
-    desc: '不进判定，只做比较',
+    title: '账号来历',
     dims: [
-      { q: 'E3', title: '用量上限', labels: USAGE_CAP, pick: (s) => [s.answers.usageCap] },
-      { q: 'C5', title: '订阅', labels: PLAN, pick: (s) => [s.answers.plan] },
-      { q: 'E1', title: '客户端', labels: CLIENT, pick: (s) => s.answers.clients, multi: true },
-      { q: 'E9', title: '用途', labels: SENSITIVE_USE, pick: (s) => s.answers.sensitiveUse ?? null, multi: true },
-    ],
-  },
-];
-
-const ENVIRONMENT: Array<{ title: string; desc?: string; dims: DimDef[] }> = [
-  {
-    title: '网络环境',
-    desc: `进环境判定：有异常项，或扣分后低于 ${ENV_PASS_SCORE} 分，算不通过`,
-    dims: [
-      verdictDim('网络环境', networkOf),
-      { q: 'D2', title: '代理情况', labels: EXIT_SHORT, pick: (s) => [s.env.exitType] },
-      levelDim('检测 + M1 M5', '出口', ['exit.proxied', 'ip.region', 'exit.consistency', 'exit.drift'], {
-        manual: (m) =>
-          (m.exitRegion !== null && !SUPPORTED_COUNTRIES.has(m.exitRegion)) || m.nodeSwitch === 'auto'
-            ? 'bad'
-            : m.exitRegion === null && m.nodeSwitch === 'unknown'
-              ? null
-              : 'ok',
-      }),
-      levelDim('检测', 'IP 质量', ['ip.type', 'ip.native', 'ip.vpn', 'ip.proxy', 'ip.tor', 'ip.abuser', 'ip.score']),
-      levelDim('检测', '泄露', ['leak.webrtc', 'leak.dns']),
-    ],
-  },
-  {
-    title: '设备指纹',
-    desc: `进环境判定：扣分后低于 ${ENV_PASS_SCORE} 分算不通过；检测设备不是使用设备的检测站样本不计入`,
-    dims: [
-      verdictDim('设备指纹', fingerprintOf),
-      levelDim('检测 + M3', '时区', ['fp.timezone', 'cross.timezone'], {
-        fingerprint: true,
-        manual: (m) => (m.timezone === 'match_exit' ? 'ok' : m.timezone === 'unknown' ? null : 'warn'),
-      }),
-      levelDim('检测 + M4', '语言与格式', ['fp.language', 'fp.locale', 'cross.language'], {
-        fingerprint: true,
-        manual: (m) => (m.language === 'zh' ? 'warn' : 'ok'),
-      }),
-      levelDim('检测 + M6', '中文软件痕迹', ['fp.fonts', 'fp.browser', 'fp.device'], {
-        fingerprint: true,
-        manual: (m) => (m.cnClient === 'yes' ? 'warn' : m.cnClient === 'no' ? 'ok' : null),
-      }),
-    ],
-  },
-  {
-    title: '账号环境',
-    desc: '只展示，不进判定',
-    dims: [
+      { q: 'C1', title: '账号来源', labels: ACCOUNT_SOURCE, pick: (s) => [s.answers.source] },
       { q: 'C2', title: '登录方式', labels: LOGIN_METHOD, pick: (s) => [s.answers.login] },
+      { q: 'C3', title: '邮箱类型', labels: EMAIL_TYPE, pick: (s) => one(s.answers.emailType) },
       { q: 'C4', title: '手机号验证', labels: PHONE_VERIFY, pick: (s) => [s.answers.phone] },
-      { q: 'C9', title: '同环境别的号被封过', labels: ENV_BAN_HISTORY, pick: (s) => [s.answers.envBanHistory] },
-    ],
-  },
-  {
-    title: '支付环境',
-    desc: '只展示，不进判定',
-    dims: [
+      { q: 'C5', title: '订阅', labels: PLAN, pick: (s) => [s.answers.plan] },
       { q: 'C6', title: '付款方式', labels: { ...PAYMENT_METHOD, free: 'Free（没付款）' }, pick: (s) => [s.answers.payment?.method ?? 'free'] },
       { q: 'C6', title: '卡类型', labels: CARD_KIND, pick: (s) => one(cardOf(s)?.kind) },
       { q: 'C6', title: '发卡地区', labels: {}, country: true, pick: (s) => one(cardOf(s)?.region) },
@@ -252,6 +163,158 @@ const ENVIRONMENT: Array<{ title: string; desc?: string; dims: DimDef[] }> = [
         country: true,
         pick: (s) => (s.answers.payment?.method === 'app_store' ? [s.answers.payment.region] : null),
       },
+      { q: 'C8', title: '同环境账号数', labels: ACCOUNTS_IN_ENV, pick: (s) => [s.answers.accountsInEnv] },
+      { q: 'C9', title: '同环境别的号被封过', labels: ENV_BAN_HISTORY, pick: (s) => [s.answers.envBanHistory] },
+    ],
+  },
+];
+
+/** 只有被封的账号答的题：展示分布 */
+const BANNED_DISTS: DimDef[] = [
+  { q: 'B3', title: '被封前后发生了什么', labels: { ...BAN_TRIGGER, ...LEGACY_BAN_TRIGGER }, multi: true, dist: true, pick: (s) => s.answers.banTriggers ?? null },
+  { q: 'B4', title: '申诉', labels: APPEAL, dist: true, pick: (s) => one(s.answers.appeal) },
+  { q: 'C7', title: '退款', labels: REFUND, dist: true, pick: (s) => one(s.answers.refund) },
+];
+
+// ---------- 网络环境（D）：默认行为干净 ----------
+
+const SAME = { same: '一致', diff: '不一致' };
+
+const NETWORK: GroupDef[] = [
+  {
+    title: '网络',
+    desc: '标「检测」的只有检测站带入的样本',
+    dims: [
+      {
+        q: '检测 + M5',
+        title: '出口 IP 一致（各域名同一个出口、不漂移）',
+        labels: SAME,
+        pick: (s) => {
+          if (s.snapshot) {
+            const c = statusOf(s, 'exit.consistency'), d = statusOf(s, 'exit.drift');
+            if (c === 'bad' || d === 'bad') return ['diff'];
+            return c === 'ok' && d === 'ok' ? ['same'] : null;
+          }
+          const m = manual(s);
+          return m?.nodeSwitch === 'fixed' ? ['same'] : m?.nodeSwitch === 'auto' ? ['diff'] : null;
+        },
+      },
+      {
+        q: '检测',
+        title: '原生 IP（IP 登记地与所在地一致）',
+        labels: { native: '原生 IP', broadcast: '广播 IP' },
+        pick: (s) => {
+          const v = statusOf(s, 'ip.native');
+          return v === 'ok' ? ['native'] : v === 'warn' ? ['broadcast'] : null;
+        },
+      },
+      { q: 'D2', title: '代理情况', labels: EXIT_SHORT, pick: (s) => [s.env.exitType] },
+      {
+        q: '检测',
+        title: 'IP 风险标记（VPN、代理、Tor、滥用，任何一家标记都算）',
+        labels: { none: '没有标记', flagged: '有标记' },
+        pick: (s) => {
+          const ids: CheckId[] = ['ip.vpn', 'ip.proxy', 'ip.tor', 'ip.abuser'];
+          const list = ids.map((id) => statusOf(s, id)).filter((v) => v && v !== 'unknown');
+          if (!list.length) return null;
+          return [list.some((v) => v === 'warn' || v === 'bad') ? 'flagged' : 'none'];
+        },
+      },
+      {
+        q: '检测',
+        title: '泄露',
+        labels: { none: '无泄露', webrtc: 'WebRTC 泄露', dns: 'DNS 泄露' },
+        multi: true,
+        pick: (s) => {
+          const w = statusOf(s, 'leak.webrtc'), d = statusOf(s, 'leak.dns');
+          const known = (v: string | undefined) => v && v !== 'unknown';
+          if (!known(w) && !known(d)) return null;
+          const out = [...(w === 'warn' || w === 'bad' ? ['webrtc'] : []), ...(d === 'warn' || d === 'bad' ? ['dns'] : [])];
+          return out.length ? out : ['none'];
+        },
+      },
+    ],
+  },
+  {
+    title: '设备指纹',
+    desc: '检测设备不是使用设备的检测站样本不计入',
+    dims: [
+      {
+        q: '检测 + M3',
+        title: '时区与出口',
+        labels: SAME,
+        pick: (s) => {
+          if (s.snapshot) {
+            if (!fpUsable(s)) return null;
+            const v = statusOf(s, 'cross.timezone');
+            return v === 'ok' ? ['same'] : v === 'warn' ? ['diff'] : null;
+          }
+          const m = manual(s);
+          return !m || m.timezone === 'unknown' ? null : [m.timezone === 'match_exit' ? 'same' : 'diff'];
+        },
+      },
+      {
+        q: '检测 + M4',
+        title: '语言与格式与出口（中文环境、出口不在中文地区算不一致）',
+        labels: SAME,
+        pick: (s) => {
+          if (s.snapshot) {
+            if (!fpUsable(s)) return null;
+            const lang = statusOf(s, 'cross.language');
+            if (!lang || lang === 'unknown') return null;
+            // 区域格式是简体中文、出口又不在中文地区，也算不一致
+            const exit = s.snapshot.local.exitCountry;
+            const zhLocale = statusOf(s, 'fp.locale') === 'warn' && !!exit && !ZH_SPEAKING.has(exit);
+            return [lang === 'warn' || zhLocale ? 'diff' : 'same'];
+          }
+          const m = manual(s);
+          if (!m) return null;
+          if (m.language !== 'zh') return ['same'];
+          return m.exitRegion === null ? null : [ZH_SPEAKING.has(m.exitRegion) ? 'same' : 'diff'];
+        },
+      },
+    ],
+  },
+];
+
+// ---------- 使用习惯（E）：默认环境干净 ----------
+
+const HAS = { no: '没有', yes: '有', decline: '不便回答' };
+
+const USAGE: GroupDef[] = [
+  {
+    title: '使用方式',
+    dims: [
+      { q: 'E1', title: '是否多客户端', labels: { single: '单一客户端', multi: '多客户端（2 个以上）' }, pick: (s) => [s.answers.clients.length > 1 ? 'multi' : 'single'] },
+      { q: 'E2', title: '是否多设备', labels: { single: '单一设备系统', multi: '多设备（2 种以上系统）' }, pick: (s) => [s.answers.os.length > 1 ? 'multi' : 'single'] },
+      { q: 'E3', title: '用量上限', labels: USAGE_CAP, pick: (s) => [s.answers.usageCap] },
+      { q: 'E4', title: '对话语言', labels: CHAT_LANGUAGE, pick: (s) => [s.answers.chatLanguage] },
+      { q: 'E5', title: '谁在用这个账号', labels: SHARING, pick: (s) => [s.answers.sharing] },
+    ],
+  },
+  {
+    title: '高风险用法',
+    desc: '比较有和没有的被封占比',
+    dims: [
+      { q: 'E6', title: '逆向或反代', labels: HAS, pick: (s) => [s.answers.reverseProxy.includes('none') ? 'no' : 'yes'] },
+      {
+        q: 'E7',
+        title: '破限或 NSFW',
+        labels: HAS,
+        pick: (s) => [s.answers.jailbreak === 'never' ? 'no' : s.answers.jailbreak === 'decline' ? 'decline' : 'yes'],
+      },
+      { q: 'E8', title: '蒸馏', labels: HAS, pick: (s) => one(s.answers.distill) },
+      {
+        q: 'E9',
+        title: '高危用途',
+        labels: HAS,
+        // 选了网络安全、批量生成、自动化脚本任一为「有」
+        pick: (s) => {
+          const u = s.answers.sensitiveUse;
+          if (!u) return null;
+          return [u.includes('decline') ? 'decline' : u.includes('none') ? 'no' : 'yes'];
+        },
+      },
     ],
   },
 ];
@@ -261,8 +324,11 @@ const RARE = 5;
 
 function countDim(def: DimDef, subs: Sub[]): BoardDim | null {
   const counts = new Map<string, Counts>();
+  let base = 0;
   for (const s of subs) {
-    for (const k of def.pick(s) ?? []) {
+    const keys = def.pick(s);
+    if (keys) base++;
+    for (const k of keys ?? []) {
       if (!counts.has(k)) counts.set(k, zero());
       add(counts.get(k)!, s.answers.status);
     }
@@ -278,13 +344,18 @@ function countDim(def: DimDef, subs: Sub[]): BoardDim | null {
       else (['banned', 'restored', 'active'] as const).forEach((f) => (other[f] += c[f]));
     }
     if (n(other)) rows.push({ key: 'other', label: '其他', c: other });
+  } else if (def.ordered) {
+    const label = def.ordered;
+    rows = [...counts]
+      .sort(([a], [b]) => (a === 'unknown' ? 1 : b === 'unknown' ? -1 : a.localeCompare(b)))
+      .map(([k, c]) => ({ key: k, label: label(k), c }));
   } else {
     rows = Object.entries(def.labels).flatMap(([k, label]) => (counts.has(k) ? [{ key: k, label, c: counts.get(k)! }] : []));
   }
-  return { q: def.q, title: def.title, multi: def.multi, country: def.country, rows };
+  return { q: def.q, title: def.title, multi: def.multi, country: def.country, base: def.dist ? base : undefined, rows };
 }
 
-function section(defs: Array<{ title: string; desc?: string; dims: DimDef[] }>, subs: Sub[]) {
+function part(defs: GroupDef[], subs: Sub[]): BoardPart {
   const t = zero();
   subs.forEach((s) => add(t, s.answers.status));
   const groups: BoardGroup[] = defs.flatMap((g) => {
@@ -349,8 +420,10 @@ export function buildBoard(subs: Sub[], today: string): BoardData {
     detect: subs.filter((s) => s.env.source === 'detect').length,
     quad,
     undetermined,
-    behavior: { scoped: section(BEHAVIOR, envClean), all: section(BEHAVIOR, subs) },
-    environment: { scoped: section(ENVIRONMENT, behClean), all: section(ENVIRONMENT, subs) },
+    account: part(ACCOUNT, subs),
+    bannedDists: BANNED_DISTS.flatMap((d) => countDim(d, banned) ?? []),
+    network: { scoped: part(NETWORK, behClean), all: part(NETWORK, subs) },
+    usage: { scoped: part(USAGE, envClean), all: part(USAGE, subs) },
     timeline,
     byEnv: [
       pair('B2', '使用多久后被封', BAN_AFTER, (a) => a.banAfter),

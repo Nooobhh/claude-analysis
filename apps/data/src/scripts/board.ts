@@ -2,6 +2,7 @@
 // 点在象限内的位置是按固定种子铺开的，没有含义；浏览器拿不到任何单份问卷
 import { countryName } from '../lib/countries';
 import {
+  BOARD_VERSION,
   MIN_N,
   bannedEver,
   total,
@@ -117,7 +118,7 @@ function heroChart(d: BoardData): string {
 const legend = () =>
   '<div class="legend"><span><i class="sw-banned"></i>已被封禁</span><span><i class="sw-restored"></i>申诉恢复</span><span><i class="sw-active"></i>正常使用</span></div>';
 
-// ---------- 用户行为 / 使用环境 ----------
+// ---------- 三块：账号情况 / 网络环境 / 使用习惯 ----------
 
 function dimHtml(d: BoardDim): string {
   const rows = d.rows
@@ -141,7 +142,7 @@ const groupsHtml = (groups: BoardGroup[]) =>
 const icon = (on: boolean[]) => `<span class="qicon" aria-hidden="true">${on.map((x) => `<i${x ? ' class="on"' : ''}></i>`).join('')}</span>`;
 
 interface PartDef {
-  id: 'behavior' | 'environment';
+  id: 'network' | 'usage';
   title: string;
   scopeName: string;
   /** 小象限图标：左上、右上、左下、右下 */
@@ -150,8 +151,8 @@ interface PartDef {
 }
 
 const PARTS: PartDef[] = [
-  { id: 'behavior', title: '用户行为', scopeName: '环境干净', icon: [true, false, true, false], desc: '只看环境干净的账号，也就是散点图的左半边：环境没问题仍被封，更可能和怎么用有关。' },
-  { id: 'environment', title: '使用环境', scopeName: '行为干净', icon: [false, false, true, true], desc: '只看行为干净的账号，也就是散点图的下半边：没有违规项仍被封，更可能和网络、设备、身份信号有关。' },
+  { id: 'network', title: '网络环境', scopeName: '行为干净', icon: [false, false, true, true], desc: '只看行为干净的账号，也就是散点图的下半边：没有违规项仍被封，更可能和网络、设备有关。' },
+  { id: 'usage', title: '使用习惯', scopeName: '环境干净', icon: [true, false, true, false], desc: '只看环境干净的账号，也就是散点图的左半边：环境没问题仍被封，更可能和怎么用有关。' },
 ];
 
 function partBody(p: PartDef, sec: BoardSection, scope: 'scoped' | 'all'): string {
@@ -172,7 +173,7 @@ function partHtml(p: PartDef, sec: BoardSection): string {
   </section>`;
 }
 
-// ---------- 封号时间与原因 ----------
+// ---------- 账号情况：注册、封禁情况、账号来历 ----------
 
 /** 最多显示 12 个月，更早的并成一列 */
 function timelineCols(d: BoardData) {
@@ -212,17 +213,84 @@ function pairHtml(p: PairDim): string {
   return `<div class="sub"><h3><span class="dim__q">${p.q}</span>${p.title}</h3>${body}</div>`;
 }
 
-function timeHtml(d: BoardData): string {
+/** 只有被封的账号答的题：分布，右侧写占被封账号的比例 */
+function distHtml(d: BoardDim): string {
+  const n = d.base ?? 0;
+  return `<div class="sub"><h3><span class="dim__q">${esc(d.q)}</span>${esc(d.title)}${d.multi ? '<span class="dim__meta">多选</span>' : ''}<span class="dim__meta">${n} 个被封账号答了</span></h3>${d.rows
+    .map((r) => `<div class="barow"><span>${esc(r.label)}</span><span class="pips">${pips(r.c)}</span><span class="barow__p">${n ? pct(bannedEver(r.c) / n) : 0}%</span></div>`)
+    .join('')}</div>`;
+}
+
+function accountHtml(d: BoardData): string {
+  const [reg, ...rest] = d.account.groups;
   const [banAfter, banReason] = d.byEnv;
-  return `<section class="part" data-part="time">
-    <div class="part__head">${icon([true, true, true, true])}<h2>封号时间与原因</h2></div>
-    <p class="part__desc">每个点是一个被封过的账号，按封禁月份堆起来。某个月突然变高，可能是一波封号潮。</p>
-    <div id="timeline"></div>
-    <p class="part__desc part__desc--sub">下面把被封的账号按环境分成两组。如果环境有问题的一组集中在前几档，说明地区问题封得更快；封禁通知里写的原因也可以拿来对照分组。</p>
-    ${pairHtml(banAfter)}${pairHtml(banReason)}
-    ${banReason.rows.length ? '' : '<p class="part__note">「封禁通知里写的原因」是问卷第 2 版新增的题，早期问卷可以回去补答。</p>'}
+  return `<section class="part" data-part="account">
+    <div class="part__head">${icon([true, true, true, true])}<h2>账号情况</h2></div>
+    <p class="part__desc">全部样本。账号状态、注册与被封的经过，以及账号的来历。</p>
+    ${reg ? groupsHtml([reg]) : ''}
+    <div class="group">
+      <div class="group__t">封禁情况 <span>· 只看被封过的账号</span></div>
+      <div class="sub"><h3><span class="dim__q">B1</span>封禁时间线</h3>
+        <p class="part__desc">每个点是一个被封过的账号，按封禁月份堆起来。某个月突然变高，可能是一波封号潮。</p>
+        <div id="timeline"></div></div>
+      <p class="part__desc part__desc--sub">下面两项把被封的账号按环境分成两组：如果环境有问题的一组集中在前几档，说明地区问题封得更快；封禁通知里写的原因也可以拿来对照分组。</p>
+      ${pairHtml(banAfter)}${pairHtml(banReason)}
+      ${banReason.rows.length ? '' : '<p class="part__note">「封禁通知里写的原因」是问卷第 2 版新增的题，早期问卷可以回去补答。</p>'}
+      ${d.bannedDists.map(distHtml).join('')}
+    </div>
+    ${groupsHtml(rest)}
   </section>`;
 }
+
+// ---------- 目录 ----------
+
+const toc = document.querySelector<HTMLElement>('#toc')!;
+
+/** 按实际渲染出来的部分生成目录：散点图、三块（含各组）、判定说明 */
+function renderToc() {
+  type Item = { el: HTMLElement; label: string; children?: Item[] };
+  const items: Item[] = [{ el: root.querySelector<HTMLElement>('#hc')!, label: '环境 × 行为' }];
+  root.querySelectorAll<HTMLElement>('.part').forEach((part) => {
+    part.id = `part-${part.dataset.part}`;
+    const children = [...part.querySelectorAll<HTMLElement>('.group')].map((g, i) => {
+      g.id = `${part.id}-${i}`;
+      // 组标题只取名字，去掉「· 说明」
+      return { el: g, label: g.querySelector('.group__t')!.firstChild!.textContent!.trim() };
+    });
+    items.push({ el: part, label: part.querySelector('h2')!.textContent!, children });
+  });
+  items.push({ el: document.querySelector<HTMLElement>('#rules')!, label: '怎么判定' });
+
+  const link = (it: Item, sub: boolean) => `<a class="toc__link${sub ? ' toc__link--sub' : ''}" href="#${it.el.id}">${esc(it.label)}</a>`;
+  toc.innerHTML = `<p class="toc__title">目录</p>${items
+    .map((it) => `<div class="toc__item">${link(it, false)}${it.children?.map((c) => link(c, true)).join('') ?? ''}</div>`)
+    .join('')}`;
+  toc.hidden = false;
+
+  tocTargets = items.flatMap((it) => [it.el, ...(it.children?.map((c) => c.el) ?? [])]);
+  updateToc();
+}
+
+let tocTargets: HTMLElement[] = [];
+
+/** 高亮当前读到的部分：顶部越过阅读线的最后一个（小节在所属大块之后，所以小节优先）；滚到底时取最后一个 */
+function updateToc() {
+  if (!tocTargets.length) return;
+  // 阅读线 = 跳转后标题停的位置（scroll-margin-top）再往下一点
+  const line = parseFloat(getComputedStyle(tocTargets[0]).scrollMarginTop) + 8;
+  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+  const current = atBottom ? tocTargets.at(-1)! : (tocTargets.filter((el) => el.getBoundingClientRect().top <= line).at(-1) ?? tocTargets[0]);
+  toc.querySelectorAll<HTMLAnchorElement>('.toc__link').forEach((a) => a.toggleAttribute('aria-current', a.hash === `#${current.id}`));
+  // 小节高亮时，所在大块也高亮
+  toc.querySelectorAll('.toc__item').forEach((item) => item.querySelector('.toc__link')!.toggleAttribute('data-parent', !!item.querySelector('[aria-current]')));
+}
+
+window.addEventListener('scroll', updateToc, { passive: true });
+
+// 点「怎么判定」时展开说明
+toc.addEventListener('click', (e) => {
+  if ((e.target as HTMLAnchorElement).hash === '#rules') document.querySelector<HTMLDetailsElement>('#rules')!.open = true;
+});
 
 // ---------- 渲染 ----------
 
@@ -249,9 +317,10 @@ function render(d: BoardData) {
     root.hidden = false;
     return;
   }
-  root.innerHTML = heroChart(d) + partHtml(PARTS[0], d.behavior) + partHtml(PARTS[1], d.environment) + timeHtml(d);
+  root.innerHTML = heroChart(d) + accountHtml(d) + PARTS.map((p) => partHtml(p, d[p.id])).join('');
   root.hidden = false;
   renderTimeline();
+  renderToc();
 }
 
 // 范围切换
@@ -286,7 +355,7 @@ window.addEventListener('resize', () => {
 
 async function init() {
   try {
-    const r = (await (await fetch('/api/board')).json()) as BoardResponse;
+    const r = (await (await fetch(`/api/board?v=${BOARD_VERSION}`)).json()) as BoardResponse;
     if (!r.ok) throw new Error(r.error);
     data = r.data;
     render(r.data);

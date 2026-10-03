@@ -1,4 +1,4 @@
-// 两站共用的地区常量：检测站判定出口地区，问卷站看板判定手动填写的出口地区
+// 两站共用的地区常量：检测站判定出口地区与语言矛盾，问卷站看板判定手动填写的出口与语言
 
 /**
  * Anthropic 支持地区（Claude.ai 与 API 两份列表相同）
@@ -13,3 +13,6 @@ export const SUPPORTED_COUNTRIES: ReadonlySet<string> = new Set(
     'ZA KR SS ES LK SD SR SE CH TW TJ TZ TH TL TG TO TT TN TR TM TV UG UA AE GB US UY UZ VU VA VN ZM ZW'
   ).split(' '),
 );
+
+/** 使用中文的地区：IP 在这些地区时浏览器用中文不算矛盾 */
+export const ZH_SPEAKING: ReadonlySet<string> = new Set(['CN', 'HK', 'MO', 'TW', 'SG', 'MY']);
