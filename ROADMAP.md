@@ -2,11 +2,7 @@
 > 项目 overview（现在 + 未来）。已发布历史看 CHANGELOG.md，agent 指令看 CLAUDE.md。
 
 ## 当前主线
-0.5.0 — 封号数据看板 + 问卷第 2 版（spec：docs/specs/board.md）
-- [x] 问卷第 2 版：新增封禁原因、蒸馏、敏感用途三题，旧问卷可选补答
-- [x] 看板接口 /api/board：按环境 / 行为判定分组汇总
-- [x] 看板页 /board：散点图 + 用户行为 / 使用环境 / 封号时间
-- [x] 隐私页、README、CLAUDE.md 同步
+0.6.0 — 待定（从 Backlog 置顶项选定后填写）
 
 ## Backlog
 - P2 数据清洗：看板 / 公开数据集出结论前，按 spec「数据清洗」逐条标记问题问卷，原始数据不改
