@@ -7,6 +7,7 @@
 ## [Unreleased]
 ### Added
 ### Changed
+- 问卷站顶部导航去掉「隐私」，隐私说明放在页脚
 ### Fixed
 ### Removed
 

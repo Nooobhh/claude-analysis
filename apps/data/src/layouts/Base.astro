@@ -10,7 +10,7 @@ const REPO_URL = 'https://github.com/Nooobhh/claude-analysis';
 interface Props {
   title: string;
   description: string;
-  current?: 'survey' | 'board' | 'privacy';
+  current?: 'survey' | 'board';
 }
 
 const { title, description, current } = Astro.props;
@@ -43,8 +43,6 @@ const { title, description, current } = Astro.props;
           <a href={DETECT_URL} target="_blank" rel="noopener">Claude 检测</a>
           <a href="/" aria-current={current === 'survey' ? 'page' : undefined}>问卷</a>
           <a href="/board" aria-current={current === 'board' ? 'page' : undefined}>数据汇总</a>
-          <!-- 窄屏放不下，只留页脚的「隐私说明」 -->
-          <a class="nav__wide" href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>隐私</a>
         </nav>
       </div>
     </header>
