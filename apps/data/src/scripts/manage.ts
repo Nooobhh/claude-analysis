@@ -1,5 +1,5 @@
 // 管理链接页：密钥取自 location.hash，放在 Authorization 头里发给 /api/submission；页面不往浏览器存任何东西。
-// 第 1 版问卷没答的新题可以补（只能填空，不强制）：B5 随状态一起，E8 / E9 在「补充新题」里
+// 旧版问卷没答的新题可以补（只能填空，不强制）：B5 随状态一起，E8–E10 在「补充新题」里
 import {
   ACCOUNT_SOURCE,
   ACCOUNT_STATUS,
@@ -27,9 +27,11 @@ import {
   PROXY_MODE,
   REFUND,
   REVERSE_PROXY,
+  SENSITIVE_TOPIC,
   SENSITIVE_USE,
   SHARING,
   SUPPLEMENT_FIELDS,
+  SURVEY_VERSION,
   SYSTEM_LANGUAGE,
   TIMEZONE_SETTING,
   USAGE_CAP,
@@ -46,6 +48,7 @@ import {
   type Payment,
   type Plan,
   type Refund,
+  type SensitiveTopic,
   type SensitiveUse,
   type StatusUpdate,
   type SupplementRequest,
@@ -70,7 +73,7 @@ const select = (name: string) => form.elements.namedItem(name) as HTMLSelectElem
 
 let plan: Plan = 'free';
 let registeredAt: string | null = null;
-let version: SurveyVersion = 2;
+let version: SurveyVersion = SURVEY_VERSION;
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 function toast(text: string) {
@@ -168,6 +171,7 @@ function answerRows({ answers: a, env: e }: ManagedSubmission): Array<[string, s
     ['破限或 NSFW', JAILBREAK[a.jailbreak]],
     ['蒸馏', a.distill && DISTILL[a.distill]],
     ['用途', a.sensitiveUse?.map((u) => SENSITIVE_USE[u]).join('、')],
+    ['敏感话题', a.sensitiveTopic?.map((t) => SENSITIVE_TOPIC[t]).join('、')],
     ['补充', a.note],
   ];
   return rows.filter((r): r is [string, string] => !!r[1]);
@@ -331,8 +335,11 @@ supForm.addEventListener('submit', async (e) => {
   const checkedOf = (name: string) => [...supForm.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)].map((i) => i.value);
   const distill = shown(supQ('distill')) ? (checkedOf('distill')[0] as Distill | undefined) : undefined;
   const uses = shown(supQ('sensitiveUse')) ? (checkedOf('sensitiveUse') as SensitiveUse[]) : [];
-  const payload: SupplementRequest = { supplement: { distill, sensitiveUse: uses.length ? uses : undefined } };
-  if (!distill && !uses.length) return toast('还没选任何答案');
+  const topics = shown(supQ('sensitiveTopic')) ? (checkedOf('sensitiveTopic') as SensitiveTopic[]) : [];
+  const payload: SupplementRequest = {
+    supplement: { distill, sensitiveUse: uses.length ? uses : undefined, sensitiveTopic: topics.length ? topics : undefined },
+  };
+  if (!distill && !uses.length && !topics.length) return toast('还没选任何答案');
   const btn = document.querySelector<HTMLButtonElement>('#supplement-save')!;
   btn.disabled = true;
   const r = await api<ManageResponse>('PATCH', payload);

@@ -28,6 +28,7 @@ import {
   PROXY_MODE,
   REFUND,
   REVERSE_PROXY,
+  SENSITIVE_TOPIC,
   SENSITIVE_USE,
   SHARING,
   SURVEY_VERSIONS,
@@ -132,8 +133,9 @@ function payment(v: unknown): Payment {
   return { method };
 }
 
-/** 第 2 版新增的题：第 2 版必答，第 1 版缺省可以，答了照常校验 */
-const added = <T>(version: SurveyVersion, v: unknown, read: () => T): T | undefined => (version === 1 && v === undefined ? undefined : read());
+/** 第 since 版新增的题：从这一版起必答，更早的版本缺省可以，答了照常校验 */
+const added = <T>(since: SurveyVersion, version: SurveyVersion, v: unknown, read: () => T): T | undefined =>
+  version < since && v === undefined ? undefined : read();
 
 /** legacy：重新校验库里已有的答案时，接受早期问卷的旧选项 */
 function answers(v: unknown, today: string, version: SurveyVersion, legacy = false): SurveyAnswers {
@@ -168,7 +170,7 @@ function answers(v: unknown, today: string, version: SurveyVersion, legacy = fal
         : many(BAN_TRIGGER, a.banTriggers, 'banTriggers', ['none'])
       : undefined,
     appeal: status === 'banned' ? one(APPEAL, a.appeal, 'appeal') : undefined,
-    banReason: banned ? added(version, a.banReason, () => one(BAN_REASON, a.banReason, 'banReason')) : undefined,
+    banReason: banned ? added(2, version, a.banReason, () => one(BAN_REASON, a.banReason, 'banReason')) : undefined,
     source: one(ACCOUNT_SOURCE, a.source, 'source'),
     login,
     emailType,
@@ -186,8 +188,11 @@ function answers(v: unknown, today: string, version: SurveyVersion, legacy = fal
     sharing: one(SHARING, a.sharing, 'sharing'),
     reverseProxy: many(REVERSE_PROXY, a.reverseProxy, 'reverseProxy', ['none']),
     jailbreak: one(JAILBREAK, a.jailbreak, 'jailbreak'),
-    distill: added(version, a.distill, () => one(DISTILL, a.distill, 'distill')),
-    sensitiveUse: added(version, a.sensitiveUse, () => many(SENSITIVE_USE, a.sensitiveUse, 'sensitiveUse', ['none', 'decline'])),
+    distill: added(2, version, a.distill, () => one(DISTILL, a.distill, 'distill')),
+    sensitiveUse: added(2, version, a.sensitiveUse, () => many(SENSITIVE_USE, a.sensitiveUse, 'sensitiveUse', ['none', 'decline'])),
+    sensitiveTopic: added(3, version, a.sensitiveTopic, () =>
+      many(SENSITIVE_TOPIC, a.sensitiveTopic, 'sensitiveTopic', ['none', 'decline']),
+    ),
     note: optText(a.note, 'note', TEXT_LIMITS.note),
   };
 }
@@ -227,7 +232,7 @@ function run<T>(fn: () => T): Validated<T> {
 }
 
 /** 校验一份提交；today 为服务器当天日期 YYYY-MM-DD。结果码只检查是字符串，验签另做。
- * 发版时还开着旧页面的人提交的是第 1 版，照样接受、按第 1 版校验 */
+ * 发版时还开着旧页面的人提交的是旧版，照样接受、按旧版校验 */
 export const validateSubmission = (input: unknown, today: string): Validated<SurveySubmission> =>
   run(() => {
     const s = obj(input, 'submission');

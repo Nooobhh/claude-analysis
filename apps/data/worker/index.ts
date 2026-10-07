@@ -202,7 +202,7 @@ async function handleGet(req: Request, env: Env): Promise<Response> {
   return reply({ ok: true, submission: await load(row, env) });
 }
 
-/** 两种改法：更新账号状态相关字段，或补答第 2 版新题（只能填空）。并进原答案后按问卷版本整份重新校验；状态变了记一条事件 */
+/** 两种改法：更新账号状态相关字段，或补答后来新增的题（只能填空）。并进原答案后按问卷版本整份重新校验；状态变了记一条事件 */
 async function handleUpdate(req: Request, env: Env): Promise<Response> {
   const row = await findByKey(req, env);
   if (!row) return notFound();

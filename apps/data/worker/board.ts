@@ -315,6 +315,17 @@ const USAGE: GroupDef[] = [
           return [u.includes('decline') ? 'decline' : u.includes('none') ? 'no' : 'yes'];
         },
       },
+      {
+        q: 'E10',
+        title: '敏感话题',
+        labels: HAS,
+        // 选了高精尖技术研究、危害社会安全任一为「有」
+        pick: (s) => {
+          const t = s.answers.sensitiveTopic;
+          if (!t) return null;
+          return [t.includes('decline') ? 'decline' : t.includes('none') ? 'no' : 'yes'];
+        },
+      },
     ],
   },
 ];

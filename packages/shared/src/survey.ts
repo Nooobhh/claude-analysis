@@ -1,9 +1,9 @@
 // 问卷字段：值是英文 key（入库 / 公开数据用），标签是中文（表单 / 看板用）。
 // 题目文案、显示条件、校验规则见 docs/specs/survey.md
 
-export const SURVEY_VERSION = 2;
-/** 服务器接受的问卷版本：第 2 版只新增题（B5、E8、E9），第 1 版问卷缺这些题照样有效 */
-export const SURVEY_VERSIONS = [1, 2] as const;
+export const SURVEY_VERSION = 3;
+/** 服务器接受的问卷版本：后一版只新增题（第 2 版 B5、E8、E9，第 3 版 E10），旧版问卷缺这些题照样有效 */
+export const SURVEY_VERSIONS = [1, 2, 3] as const;
 export type SurveyVersion = (typeof SURVEY_VERSIONS)[number];
 
 /** ISO 3166-1 alpha-2，大写 */
@@ -321,6 +321,15 @@ export const SENSITIVE_USE = {
 } as const;
 export type SensitiveUse = keyof typeof SENSITIVE_USE;
 
+/** 第 3 版新增；多选，none、decline 与其他选项互斥 */
+export const SENSITIVE_TOPIC = {
+  frontier_tech: '国产芯片、军工等高精尖技术研究',
+  public_safety: '恐怖主义、武器、暴力等危害社会安全的话题',
+  none: '都没有',
+  decline: '不便回答',
+} as const;
+export type SensitiveTopic = keyof typeof SENSITIVE_TOPIC;
+
 // ---------- 汇总 ----------
 
 /** 自由文本长度上限（表单 maxlength 与服务端校验共用） */
@@ -374,6 +383,8 @@ export interface SurveyAnswers {
   distill?: Distill;
   /** 第 2 版新增；第 1 版问卷可能没有 */
   sensitiveUse?: SensitiveUse[];
+  /** 第 3 版新增；第 1、2 版问卷可能没有 */
+  sensitiveTopic?: SensitiveTopic[];
 
   // F 补充（选填）
   note?: string;
@@ -402,13 +413,13 @@ export type SubmitResponse = { ok: true; key: string } | { ok: false; error: Sub
 export const STATUS_FIELDS = ['status', 'bannedAt', 'banAfter', 'banTriggers', 'appeal', 'banReason', 'refund'] as const;
 export type StatusUpdate = Pick<SurveyAnswers, (typeof STATUS_FIELDS)[number]>;
 
-/** 第 1 版问卷可以补答的新题（B5 随状态一起改，不在这里）；只能填空，不能改已答的 */
-export const SUPPLEMENT_FIELDS = ['distill', 'sensitiveUse'] as const;
+/** 旧版问卷可以补答的新题（B5 随状态一起改，不在这里）；只能填空，不能改已答的 */
+export const SUPPLEMENT_FIELDS = ['distill', 'sensitiveUse', 'sensitiveTopic'] as const;
 export type SupplementUpdate = Pick<SurveyAnswers, (typeof SUPPLEMENT_FIELDS)[number]>;
 /** PATCH /api/submission 的补答请求；不带 supplement 的请求是更新状态（StatusUpdate） */
 export type SupplementRequest = { supplement: SupplementUpdate };
 
-/** 还没答的第 2 版新题：问卷页据此提示可以补充 */
+/** 还没答的新题：问卷页据此提示可以补充 */
 export function unansweredNew(a: SurveyAnswers): Array<'banReason' | (typeof SUPPLEMENT_FIELDS)[number]> {
   const list: Array<'banReason' | (typeof SUPPLEMENT_FIELDS)[number]> = [];
   if (a.status !== 'active' && !a.banReason) list.push('banReason');

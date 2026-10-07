@@ -21,6 +21,7 @@ import {
   type CheckId,
   type BanReason,
   type Distill,
+  type SensitiveTopic,
   type SensitiveUse,
   type DetectSnapshot,
   type Client,
@@ -272,6 +273,7 @@ function build(): { data: SurveySubmission | null; errors: Map<string, string> }
     jailbreak: pick<Jailbreak>('jailbreak'),
     distill: pick<Distill>('distill'),
     sensitiveUse: pickMany<SensitiveUse>('sensitiveUse'),
+    sensitiveTopic: pickMany<SensitiveTopic>('sensitiveTopic'),
     note: text('note') || undefined,
   };
 

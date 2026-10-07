@@ -29,7 +29,7 @@
 - Worker 入口 `apps/detect/worker/index.ts`，只接 `/api/*`；配置 `apps/detect/wrangler.jsonc`
 - 问卷：设计 `docs/specs/survey.md`；字段在 shared `survey.ts`，检测快照在 `snapshot.ts`，改题先改 spec
 - 问卷页是 5 步向导，显示条件写在 `apps/data/src/scripts/survey.ts` 的 `update()`，须与 spec 各题条件一致
-- 问卷第 2 版（`SURVEY_VERSION`）只加题：新题按版本校验，第 1 版缺新题仍有效；补答只能填空，见 survey.md「版本与补答」
+- 问卷现为第 3 版（`SURVEY_VERSION`），每版只加题：新题从起始版本起必答，旧版缺新题仍有效；补答只能填空，见 survey.md「版本与补答」
 - 看板：页面 `src/pages/board.astro` + `src/scripts/board.ts`；`/api/board` 在 `worker/board.ts` 汇总，规则见 `docs/specs/board.md`
 - 看板的环境 / 行为判定只写在 `worker/board.ts`，改规则先改 board.md；下发结构在 `src/lib/board.ts`
 - 改题要同步四处：spec、shared `survey.ts`（字段）、shared `validate.ts`（服务端校验）、问卷页

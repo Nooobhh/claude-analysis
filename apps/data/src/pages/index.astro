@@ -22,6 +22,7 @@ import {
   PROXY_MODE,
   REFUND,
   REVERSE_PROXY,
+  SENSITIVE_TOPIC,
   SENSITIVE_USE,
   SHARING,
   SYSTEM_LANGUAGE,
@@ -220,6 +221,7 @@ const GP_VIA = { ...CARD_KIND, other: '其他' };
         <Question id="jailbreak" num="E7" label="有没有破限或 NSFW 使用" hint="只用于统计，选「不便回答」也没关系" options={JAILBREAK} />
         <Question id="distill" num="E8" label="有没有用 Claude 的回答训练或微调别的模型（蒸馏）" hint="只用于统计，选「不便回答」也没关系" options={DISTILL} />
         <Question id="sensitiveUse" num="E9" label="有没有这些用途" options={SENSITIVE_USE} multi exclusive={['none', 'decline']} />
+        <Question id="sensitiveTopic" num="E10" label="对话有没有涉及这些敏感话题" hint="只用于统计，选「不便回答」也没关系" options={SENSITIVE_TOPIC} multi exclusive={['none', 'decline']} />
       </div>
     </section>
 
