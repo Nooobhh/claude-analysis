@@ -1,25 +1,46 @@
 ---
-import { ENV_PASS_SCORE, FINGERPRINT_WARN, NETWORK_WARN, STATUS_LABEL } from '@claude-analysis/shared';
+import { STATUS_LABEL } from '@claude-analysis/shared';
+import CheckCard from '../components/CheckCard.astro';
+import Icon from '../components/Icon.astro';
+import Section from '../components/Section.astro';
 import Base from '../layouts/Base.astro';
 import { COMMIT, VERSION } from '../lib/build-info';
-import { CARDS, CHECKS, EXIT_ROWS, anchorOf } from '../lib/catalog';
-import { SURVEY_URL } from '../lib/sites';
+import {
+  AVAIL_CHECKS,
+  CHECKS,
+  CROSS_CHECKS,
+  EXIT_CHECKS,
+  EXIT_ROWS,
+  FP_CHECKS,
+  IP_ATTRS,
+  IP_RISKS,
+  anchorOf,
+  type CheckDef,
+} from '../lib/catalog';
 
 const STATS = ['bad', 'warn', 'ok', 'unknown'] as const;
-const num = (i: number) => String(i).padStart(2, '0');
-/** 扣分规则全文，与问卷站看板共用 shared scoring.ts */
-const rules = (warn: typeof NETWORK_WARN) =>
-  Object.values(warn)
-    .map(([label, points]) => `${label} −${points}`)
-    .join(' · ');
+/** 分区导航（Header），id 与下方各分区一致 */
+const NAV = [
+  ['ip', 'IP 信息'],
+  ['exits', '出口'],
+  ['leaks', '泄露'],
+  ['avail', '可用性'],
+  ['env', '环境'],
+] as const;
+const FIELD_GROUPS: Array<[title: string, checks: CheckDef[]]> = [
+  ['属性', IP_ATTRS],
+  ['风险标记 · proxycheck.io 与 ipapi.is 同时查询', IP_RISKS],
+];
 ---
 
 <Base
   title="Claude 使用环境检测 · claude-analysis"
   description="检测访问 Claude 时的出口 IP、IP 风险、环境指纹与 WebRTC / DNS 泄露。开源、本地检测、不存数据。"
-  current="home"
 >
-  <button slot="header-actions" class="switch" id="toggle-ip" type="button" role="switch" aria-checked="false">
+  <nav slot="header-nav" class="sectnav" aria-label="页面分区">
+    {NAV.map(([id, name]) => <a href={`#${id}`}>{name}</a>)}
+  </nav>
+  <button slot="header-actions" class="switch" id="toggle-ip" type="button" role="switch" aria-checked="true">
     <span class="switch__track" aria-hidden="true"></span>显示 IP
   </button>
 
@@ -47,14 +68,10 @@ const rules = (warn: typeof NETWORK_WARN) =>
         <span class="summary__label" id="progress-label">检测中 0/{CHECKS.length}</span>
         <div class="summary__actions">
           <button class="btn" id="rerun" type="button">重新检测</button>
-          <button class="btn" id="copy-code" type="button" data-version={VERSION} data-commit={COMMIT}>复制结果码</button>
-          <button class="btn btn--primary" id="copy" type="button">复制报告</button>
+          <button class="btn btn--primary" id="copy-code" type="button" data-version={VERSION} data-commit={COMMIT}>复制结果码</button>
         </div>
       </div>
     </div>
-    <p class="summary__note">
-      结果码用于填写 <a href={SURVEY_URL} target="_blank" rel="noopener">Claude 使用情况调查问卷</a>：只含检测结论，不含任何 IP；在浏览器里生成后复制，不会发送任何数据。
-    </p>
     <div class="verdicts" id="verdicts" hidden>
       {
         [
@@ -64,17 +81,9 @@ const rules = (warn: typeof NETWORK_WARN) =>
           <div class="verdict" data-kind={kind}>
             <span class="verdict__name">{name}</span>
             <span class="tag" data-status="unknown">无法判断</span>
-            <span class="verdict__detail" />
           </div>
         ))
       }
-      <details class="verdict__rules">
-        <summary>怎么判定</summary>
-        <p>满分 100，扣到 {ENV_PASS_SCORE} 分以下不通过；页面只显示通过与否和扣了哪些分，不显示分数。</p>
-        <p>网络环境：任何一项「异常」直接不通过；「注意」扣分：{rules(NETWORK_WARN)}。</p>
-        <p>设备指纹：「注意」扣分：{rules(FINGERPRINT_WARN)}。</p>
-        <p>权重是初始值，等收集到足够的封号数据再校准。</p>
-      </details>
     </div>
     <div class="issues" id="issues" hidden>
       <h2 class="issues__title">发现的问题</h2>
@@ -84,60 +93,37 @@ const rules = (warn: typeof NETWORK_WARN) =>
     <p class="sr-only" id="announce" aria-live="polite"></p>
   </div>
 
-  <section class="card panel panel--table" aria-labelledby="card-exits">
-    <h2 class="card__title" id="card-exits"><span class="card__num">01</span>出口一览</h2>
-    <p class="card__desc">流量离开你设备的每条通道。正常情况下 Claude 各通道应是同一个境外 IP，WebRTC 与 DNS 不应落在国内。</p>
-    <div class="xtable" role="table" aria-labelledby="card-exits">
-      <div class="xrow xrow--head" role="row">
-        <span role="columnheader">通道</span>
-        <span role="columnheader">出口 IP</span>
-        <span role="columnheader">地区 / 说明</span>
-        <span role="columnheader">状态</span>
+  <Section
+    id="ip"
+    title="IP 信息"
+    icon="globe"
+    desc="Claude 看到的出口 IP 及其属性与风险标记。只有这个 IP 会发给本站查询，结果缓存 24 小时；两家数据库结论不同时并排显示。"
+  >
+    <div class="card ipcard">
+      <div class="ipcard__head">
+        <div>
+          <span class="ipcard__label">Claude 出口 IP</span>
+          <div class="ipcard__ip">
+            <span class="ipcard__value" id="hero-ip"><span class="skeleton"></span></span>
+            <button class="icon-btn" id="copy-ip" type="button" aria-label="复制 IP" title="复制 IP" hidden>
+              <Icon name="copy" />
+            </button>
+          </div>
+        </div>
+        <span class="ipcard__note" id="hero-note">检测中</span>
       </div>
       {
-        EXIT_ROWS.map((row) => (
-          <div class="xrow check" data-check={row.id} id={anchorOf(row.id)} role="row">
-            <div class="xrow__channel" role="cell">
-              <span class="check__name">{row.label}</span>
-              {row.hint && <span class="check__hint">{row.hint}</span>}
-            </div>
-            <div class="xrow__ip check__value" role="cell">
-              <span class="skeleton" />
-            </div>
-            <p class="xrow__note check__reason" role="cell" hidden />
-            <div class="xrow__status" role="cell">
-              <span class="tag" data-status="pending">
-                检测中
-              </span>
-            </div>
-            <details class="details xrow__details" hidden>
-              <summary />
-              <dl />
-            </details>
-          </div>
-        ))
-      }
-    </div>
-  </section>
-
-  <div class="grid">
-    {
-      CARDS.map((card, i) => (
-        <section class:list={['card', 'panel', { 'panel--wide': card.wide }]} aria-labelledby={`card-${card.id}`}>
-          <h2 class="card__title" id={`card-${card.id}`}>
-            <span class="card__num">{num(i + 2)}</span>
-            {card.title}
-          </h2>
-          {card.desc && <p class="card__desc">{card.desc}</p>}
-          <div class="panel__rows">
-            {card.checks.map((check) => (
-              <div class="check" data-check={check.id} id={anchorOf(check.id)}>
-                <div class="check__main">
-                  <div class="check__label">
-                    <span class="check__name">{check.label}</span>
-                    {check.hint && <span class="check__hint">{check.hint}</span>}
-                  </div>
-                  <div class="check__right">
+        FIELD_GROUPS.map(([title, checks]) => (
+          <div class="ipcard__group">
+            <h3 class="ipcard__group-title">{title}</h3>
+            <div class="fields">
+              {checks.map((check) => (
+                <div class="field" data-check={check.id} id={anchorOf(check.id)}>
+                  <span class="field__label">
+                    {check.icon && <Icon name={check.icon} />}
+                    {check.label}
+                  </span>
+                  <div class="field__body">
                     <span class="check__value">
                       <span class="skeleton" />
                     </span>
@@ -145,19 +131,84 @@ const rules = (warn: typeof NETWORK_WARN) =>
                       检测中
                     </span>
                   </div>
+                  <p class="check__reason" hidden />
                 </div>
-                <p class="check__reason" hidden />
-                <details class="details" hidden>
-                  <summary />
-                  <dl />
-                </details>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </section>
-      ))
-    }
-  </div>
+        ))
+      }
+    </div>
+  </Section>
+
+  <Section
+    id="exits"
+    title="出口一览"
+    icon="route"
+    desc="流量离开你设备的每条通道。正常情况下 Claude 各通道应是同一个境外 IP，WebRTC 与 DNS 不应落在国内。"
+  >
+    <div class="card xcard">
+      <div class="xtable" role="table" aria-label="出口一览">
+        <div class="xrow xrow--head" role="row">
+          <span role="columnheader">通道</span>
+          <span role="columnheader">出口 IP</span>
+          <span role="columnheader">地区 / 说明</span>
+          <span role="columnheader">状态</span>
+        </div>
+        {
+          EXIT_ROWS.map((row) => (
+            <div class="xrow check" data-check={row.id} id={anchorOf(row.id)} role="row">
+              <div class="xrow__channel" role="cell">
+                <span class="check__name">{row.label}</span>
+                {row.hint && <span class="check__hint">{row.hint}</span>}
+              </div>
+              <div class="xrow__ip check__value" role="cell">
+                <span class="skeleton" />
+              </div>
+              <p class="xrow__note check__reason" role="cell" hidden />
+              <div class="xrow__status" role="cell">
+                <span class="tag" data-status="pending">
+                  检测中
+                </span>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+    <div class="minis">
+      {EXIT_CHECKS.map((check) => <CheckCard check={check} />)}
+    </div>
+  </Section>
+
+  <Section
+    id="leaks"
+    title="泄露检测"
+    icon="droplet"
+    desc="WebRTC 走 UDP、DNS 查询走系统解析器，都可能绕过代理暴露真实网络。每个 STUN 服务器、每个 DNS 解析器各一张卡。"
+    rerun="leaks"
+  >
+    <div class="minis">
+      <div class="minis__group" data-leak="leak.webrtc"></div>
+      <div class="minis__group" data-leak="leak.dns"></div>
+    </div>
+  </Section>
+
+  <Section id="avail" title="可用性" icon="activity" desc="到 Anthropic 的延迟与官方服务状态。" rerun="avail">
+    <div class="minis">
+      {AVAIL_CHECKS.map((check) => <CheckCard check={check} />)}
+    </div>
+  </Section>
+
+  <Section id="env" title="环境指纹" icon="monitor" desc="网页能读到的系统特征，全部在本地计算。">
+    <div class="minis">
+      {FP_CHECKS.map((check) => <CheckCard check={check} />)}
+    </div>
+    <h3 class="sect__sub">交叉比对<span> · 单项正常、放在一起互相矛盾的组合</span></h3>
+    <div class="minis">
+      {CROSS_CHECKS.map((check) => <CheckCard check={check} />)}
+    </div>
+  </Section>
 
   <div class="toast" id="toast" role="status"></div>
 </Base>

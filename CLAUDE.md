@@ -12,10 +12,10 @@
 ## Agent 行为约定
 - 继承全局 ~/CLAUDE.md 编码原则；不走 /ohaze:ship，按 ROADMAP 当前主线逐项直接开发，每步汇报
 - 检测站是项目主体、长期维护（以后可能迁服务器）；问卷站是短期附属，留在 CF，可能下线
-- 检测站不得依赖问卷站：问卷站下线后检测站照常可用；下线时删 `apps/detect/src/lib/sites.ts` 与「复制结果码」
+- 检测站不得依赖问卷站：问卷站下线后检测站照常可用；下线时删检测页「复制结果码」按钮及其结果码代码
 - 前端样式唯一依据 = `DESIGN.md`（Vercel 风中立工具风，Geist 自托管）
 - 可借用 FuckClaude / MyIP（均 MIT）的代码，搬运时在文件头保留原版权声明
-- 单项按客观规则标「正常 / 注意 / 异常」；网络环境、设备指纹按 shared `scoring.ts` 加权扣分，两站只显示通过与否和扣分明细，不显示分数
+- 单项按客观规则标「正常 / 注意 / 异常」；网络环境、设备指纹按 shared `scoring.ts` 加权扣分，检测站只显示通过与否，不显示分数
 - 扣分权重是初始值，改权重先改 board.md「环境判定」，检测站与看板同时生效
 
 ## 关键文件 / 命令
@@ -37,6 +37,7 @@
 - 改表结构 = 新增 migration；线上先跑 `wrangler d1 migrations apply claudeban --remote` 再部署
 - 管理页 `apps/data/src/pages/m.astro`（/m#密钥）；接口 GET/PATCH/DELETE `/api/submission`，密钥走 Authorization 头
 - 检测项：ID 在 shared `CHECK_IDS`，文案在 `src/lib/catalog.ts`，判定在 `src/lib/checks/*`，调度在 `src/scripts/detect.ts`
+- 检测站分区 / 小卡片样式只写 `apps/detect/src/styles/detect.css`，图标在 `src/lib/icons.ts`；不动 shared token
 - 支持地区列表在 shared `regions.ts`（检测站判定出口、问卷站看板判定手动出口共用）
 - Worker secret：`IP_HASH_SALT`、`PROXYCHECK_KEY`、`IPAPI_KEY`（线上均已配置）；可选 `IPINFO_TOKEN`；本地放 `.dev.vars`
 - 结果码签名私钥 = 检测站 secret `RESULT_CODE_KEY`；公钥在 `apps/data/src/lib/result-code.ts`，换钥两边同步

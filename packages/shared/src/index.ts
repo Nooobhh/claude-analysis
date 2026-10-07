@@ -10,7 +10,7 @@ export const STATUS_LABEL: Record<Status, string> = {
   unknown: '未知',
 };
 
-/** 检测项 ID：检测站渲染、复制报告、数据站问卷带入都用这一份 */
+/** 检测项 ID：检测站渲染、数据站问卷带入都用这一份 */
 export const CHECK_IDS = [
   'exit.claude',
   'exit.api',

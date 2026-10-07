@@ -293,23 +293,6 @@ code {
   font-size: 13px;
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
-  margin-top: 16px;
-}
-
-@media (min-width: 900px) {
-  .grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .panel--wide {
-    grid-column: 1 / -1;
-  }
-}
-
 /* ---------- 结论卡：统计 + 发现的问题 ---------- */
 
 .summary {
@@ -392,64 +375,21 @@ code {
   gap: 8px;
 }
 
-.summary__note {
-  margin-top: -4px;
-  padding: 0 20px 16px;
-  color: var(--fg-muted);
-  font-size: 12px;
-}
-
-/* 环境结论：网络环境、设备指纹通过与否 + 扣分明细（DESIGN.md §4.1） */
+/* 环境结论：网络环境、设备指纹通过与否（DESIGN.md §4.1） */
 .verdicts {
   padding: 16px 20px;
   border-top: 1px solid var(--border);
 }
 
 .verdict {
-  display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 4px 12px;
+  gap: 12px;
   padding: 4px 0;
 }
 
 .verdict__name {
   font-weight: 500;
-}
-
-.verdict .tag {
-  justify-self: start;
-}
-
-.verdict__detail {
-  color: var(--fg-muted);
-  font-size: 12px;
-}
-
-@media (max-width: 560px) {
-  .verdict {
-    grid-template-columns: auto auto;
-    justify-content: start;
-  }
-
-  .verdict__detail {
-    grid-column: 1 / -1;
-  }
-}
-
-.verdict__rules {
-  margin-top: 8px;
-  color: var(--fg-muted);
-  font-size: 12px;
-}
-
-.verdict__rules summary {
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.verdict__rules p {
-  margin-top: 6px;
 }
 
 .issues {
@@ -615,14 +555,6 @@ code {
   padding: 20px 20px 8px;
 }
 
-.panel--table {
-  margin-top: 16px;
-}
-
-.panel__rows {
-  margin-top: 8px;
-}
-
 .check {
   padding: 12px 0;
 }
@@ -715,8 +647,7 @@ code {
   grid-template-areas:
     'channel status'
     'ip ip'
-    'note note'
-    'details details';
+    'note note';
   gap: 4px 12px;
   align-items: center;
   padding: 12px 0;
@@ -757,10 +688,6 @@ code {
   justify-self: end;
 }
 
-.xrow__details {
-  grid-area: details;
-}
-
 .xrow .skeleton {
   width: 120px;
 }
@@ -769,9 +696,7 @@ code {
   /* 每行是独立网格，前两列用固定宽度保证各行对齐 */
   .xrow {
     grid-template-columns: 170px 200px minmax(0, 1fr) auto;
-    grid-template-areas:
-      'channel ip note status'
-      'details details details details';
+    grid-template-areas: 'channel ip note status';
     column-gap: 16px;
   }
 

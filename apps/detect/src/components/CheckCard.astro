@@ -1,0 +1,25 @@
+---
+// 检测卡：一个检测项一张小卡片（DESIGN.md §4.22）；内容由检测脚本按 data-check 填入
+import type { CheckDef } from '../lib/catalog';
+import { anchorOf } from '../lib/catalog';
+
+interface Props {
+  check: CheckDef;
+}
+
+const { check } = Astro.props;
+---
+
+<article class="cc" data-check={check.id} id={anchorOf(check.id)}>
+  <div class="cc__head">
+    <span class="check__name">{check.label}</span>
+    <span class="tag" data-status="pending">检测中</span>
+  </div>
+  {check.hint && <span class="check__hint">{check.hint}</span>}
+  <div class="check__value cc__value"><span class="skeleton"></span></div>
+  <p class="check__reason" hidden></p>
+  <details class="details" hidden>
+    <summary></summary>
+    <dl></dl>
+  </details>
+</article>

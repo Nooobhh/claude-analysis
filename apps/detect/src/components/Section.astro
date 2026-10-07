@@ -1,0 +1,33 @@
+---
+// 检测站分区：大标题 + 说明 + 可选「重新检测这一区」（DESIGN.md §4.20）
+import type { IconName } from '../lib/icons';
+import Icon from './Icon.astro';
+
+interface Props {
+  id: string;
+  title: string;
+  icon: IconName;
+  desc: string;
+  /** 能单独重测的分区才给刷新按钮，值为脚本里的分区名 */
+  rerun?: 'leaks' | 'avail';
+}
+
+const { id, title, icon, desc, rerun } = Astro.props;
+---
+
+<section class="sect" id={id} aria-labelledby={`${id}-title`}>
+  <div class="sect__head">
+    <h2 class="sect__title" id={`${id}-title`}><Icon name={icon} />{title}</h2>
+    {
+      rerun && (
+        <button class="icon-btn" type="button" data-rerun={rerun} aria-label={`重新检测${title}`} title={`重新检测${title}`}>
+          <Icon name="refresh" />
+        </button>
+      )
+    }
+  </div>
+  <p class="sect__desc">{desc}</p>
+  <div class="sect__body">
+    <slot />
+  </div>
+</section>

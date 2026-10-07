@@ -2,6 +2,7 @@
 import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import '@claude-analysis/shared/global.css';
+import '../styles/detect.css';
 import { COMMIT, DIRTY, VERSION } from '../lib/build-info';
 
 const REPO_URL = 'https://github.com/Nooobhh/claude-analysis';
@@ -9,10 +10,9 @@ const REPO_URL = 'https://github.com/Nooobhh/claude-analysis';
 interface Props {
   title: string;
   description: string;
-  current?: 'home' | 'privacy';
 }
 
-const { title, description, current } = Astro.props;
+const { title, description } = Astro.props;
 ---
 
 <!doctype html>
@@ -37,8 +37,8 @@ const { title, description, current } = Astro.props;
           </svg>
           claude-analysis
         </a>
+        <slot name="header-nav" />
         <nav class="nav">
-          <a href="/privacy" aria-current={current === 'privacy' ? 'page' : undefined}>隐私</a>
           <slot name="header-actions" />
         </nav>
       </div>

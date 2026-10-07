@@ -11,9 +11,9 @@ import {
   type LocalSnapshot,
   type Status,
 } from '@claude-analysis/shared';
-import { ANTHROPIC_DOMAINS, CHECKS, REPORT_GROUPS, anchorOf } from '../lib/catalog';
+import { ANTHROPIC_DOMAINS, CHECKS, GROUPS, anchorOf } from '../lib/catalog';
 import { fetchStatus, judgeLatency, judgeStatus } from '../lib/checks/availability';
-import { getDomestic, judgeConsistency, judgeDomestic, judgeDrift, judgeExit, judgeProxied } from '../lib/checks/exits';
+import { getDomestic, judgeConsistency, judgeDomestic, judgeDrift, judgeExit, judgeProxied, type Domestic } from '../lib/checks/exits';
 import {
   browserFamily,
   checkBrowser,
@@ -50,8 +50,11 @@ const DRIFT_INTERVAL_MS = 2000;
 const API_SAMPLES = 3;
 
 const results = new Map<CheckId, Result>();
-let showIp = false;
+let showIp = true;
 let runId = 0;
+/** 上一轮全量检测拿到的出口，「泄露检测」单独重测时拿来比对 */
+let lastExits: Trace[] = [];
+let lastDomestic: Domestic | null = null;
 
 /** 结果码要用、但 results 里没有的原始结论，随检测逐项填入 */
 interface CodeFacts {
@@ -113,6 +116,8 @@ function renderDetail(d: Detail): HTMLElement {
 }
 
 function renderRow(id: CheckId) {
+  if (id === 'exit.claude' || id === 'exit.api') renderHero();
+  if (id === 'leak.webrtc' || id === 'leak.dns') renderLeak(id);
   const root = $(`[data-check="${id}"]`);
   if (!root) return;
   const value = $('.check__value', root)!;
@@ -151,13 +156,81 @@ function renderRow(id: CheckId) {
   }
 }
 
+function el(tag: string, cls: string, ...children: Array<Node | string>): HTMLElement {
+  const e = document.createElement(tag);
+  e.className = cls;
+  e.append(...children);
+  return e;
+}
+
+const skeleton = () => el('span', 'skeleton');
+const ipOf = (r: Result | undefined) => r?.value.find((p): p is { ip: string } => typeof p === 'object' && 'ip' in p)?.ip;
+
+/** IP 信息大卡头部：claude.ai 出口，拿不到时退到 api.anthropic.com（与 IP 查询的对象一致） */
+function renderHero() {
+  const box = $('#hero-ip')!;
+  const note = $('#hero-note')!;
+  const copy = $('#copy-ip')!;
+  const hit = (
+    [
+      ['exit.claude', 'claude.ai'],
+      ['exit.api', 'api.anthropic.com'],
+    ] as const
+  ).find(([id]) => ipOf(results.get(id)));
+  copy.hidden = !hit;
+  if (hit) {
+    const r = results.get(hit[0])!;
+    box.replaceChildren(...renderParts(r.value));
+    note.textContent = `${hit[1]} 看到的出口 · ${r.reason ?? ''}`;
+    copy.dataset.ip = ipOf(r);
+  } else if (results.has('exit.claude') && results.has('exit.api')) {
+    box.replaceChildren('—');
+    note.textContent = '没有拿到 Claude 出口 IP';
+  } else {
+    box.replaceChildren(skeleton());
+    note.textContent = '检测中';
+  }
+}
+
+const LEAK_TITLE = { 'leak.webrtc': 'WebRTC', 'leak.dns': 'DNS 解析器' } as const;
+
+function leakCard(title: string, num: string, sub: string, main: Array<Node | string>, status: string, note = ''): HTMLElement {
+  const card = el(
+    'article',
+    'mini',
+    el('div', 'mini__head', el('span', 'mini__title', title), el('span', 'mini__num', num)),
+    el('span', 'mini__sub', sub),
+    el('div', 'mini__ip', ...main),
+    el('p', 'mini__note', note),
+  );
+  card.dataset.status = status;
+  return card;
+}
+
+/** 泄露卡片：每个 STUN 服务器、每个 DNS 解析器一张；没有逐个结果时只放一张写结论 */
+function renderLeak(id: keyof typeof LEAK_TITLE) {
+  const box = $(`[data-leak="${id}"]`)!;
+  const title = LEAK_TITLE[id];
+  const r = results.get(id);
+  if (!r) return box.replaceChildren(leakCard(title, '', '检测中', [skeleton()], 'pending'));
+  if (!r.details?.length) {
+    return box.replaceChildren(leakCard(title, '', '', [r.tag ?? '—'], r.status ?? 'none', r.reason));
+  }
+  box.replaceChildren(
+    ...r.details.map((d, i) => {
+      const hasIp = d.value.some((p) => typeof p === 'object' && 'ip' in p);
+      return leakCard(title, `#${i + 1}`, d.label, renderParts(d.value), d.status ?? (hasIp ? 'ok' : 'none'), d.note);
+    }),
+  );
+}
+
 function counts(): Record<Status, number> {
   const c: Record<Status, number> = { ok: 0, warn: 0, bad: 0, unknown: 0 };
   for (const r of results.values()) if (r.status) c[r.status]++;
   return c;
 }
 
-const groupOf = new Map(REPORT_GROUPS.flatMap((g) => g.checks.map((c) => [c.id, g.title] as const)));
+const groupOf = new Map(GROUPS.flatMap((g) => g.checks.map((c) => [c.id, g.title] as const)));
 
 /** 「发现的问题」：异常在前、注意在后，按页面顺序；点击跳到对应检测项 */
 function renderIssues(finished: boolean) {
@@ -191,7 +264,7 @@ function renderIssues(finished: boolean) {
   );
 }
 
-/** 环境结论：网络环境、设备指纹通过与否 + 扣分明细（规则在 shared scoring.ts，与问卷站看板共用）；不显示分数 */
+/** 环境结论：网络环境、设备指纹通过与否（规则在 shared scoring.ts，与问卷站看板共用）；不显示分数与扣分明细 */
 function verdicts(): Array<[kind: 'network' | 'fingerprint', name: string, v: EnvVerdict]> {
   const status = Object.fromEntries([...results].flatMap(([id, r]) => (r.status ? [[id, r.status]] : [])));
   return [
@@ -200,23 +273,12 @@ function verdicts(): Array<[kind: 'network' | 'fingerprint', name: string, v: En
   ];
 }
 
-const labelOf = new Map(CHECKS.map((c) => [c.id, c.label]));
-
-function verdictText(v: EnvVerdict): string {
-  if (v.unknown) return '检测失败，无法判断';
-  if (v.fatal.length) {
-    return `有异常：${v.fatal.map((id) => `${groupOf.get(id)} · ${labelOf.get(id)}${results.get(id)?.tag ? `（${results.get(id)!.tag}）` : ''}`).join('、')}`;
-  }
-  return v.deductions.length ? v.deductions.map((d) => `${d.label} −${d.points}`).join(' · ') : '没有扣分项';
-}
-
 function renderVerdicts(finished: boolean) {
   $('#verdicts')!.hidden = !finished;
   if (!finished) return;
   for (const [kind, , v] of verdicts()) {
     const row = $(`.verdict[data-kind="${kind}"]`)!;
     setTag(row.querySelector<HTMLElement>('.tag')!, v.unknown ? 'unknown' : v.pass ? 'ok' : 'bad', v.unknown ? '无法判断' : v.pass ? '通过' : '不通过');
-    row.querySelector('.verdict__detail')!.textContent = verdictText(v);
   }
 }
 
@@ -247,28 +309,72 @@ function renderSummary() {
 
 // ---------- 检测调度 ----------
 
-async function run() {
-  const my = ++runId;
-  const put = (id: CheckId, r: Result) => {
+type Put = (id: CheckId, r: Result) => void;
+type Note = (patch: Partial<CodeFacts>) => void;
+
+/** 只接受本轮的结果：重新检测后，上一轮迟到的结果直接丢弃 */
+const putFor =
+  (my: number): Put =>
+  (id, r) => {
     if (my !== runId) return;
     results.set(id, r);
     renderRow(id);
     renderSummary();
   };
+const noteFor =
+  (my: number): Note =>
+  (patch) => {
+    if (my === runId) Object.assign(facts, patch);
+  };
+
+const sample = async (first: Promise<Trace | null>, host: string, n: number, gap: number) => {
+  const list = [await first];
+  for (let i = 1; i < n; i++) {
+    await delay(gap);
+    list.push(await getTrace(host));
+  }
+  return list;
+};
+
+/** 泄露：WebRTC 与 DNS；全量检测与「泄露检测」单独重测共用 */
+function runLeaks(put: Put, note: Note, exitsP: Promise<Trace[]>, domesticP: Promise<Domestic | null>) {
+  const webrtcP = Promise.all([probeWebrtc(), exitsP, domesticP]).then(async ([p, exits, d]) => {
+    const r = await judgeWebrtc(p, exits, d);
+    put('leak.webrtc', r);
+    note({ webrtc: webrtcLeakOf(p, r) });
+  });
+  const dnsP = probeDns().then((p) => {
+    put('leak.dns', judgeDns(p));
+    note({ dnsCountries: dnsCountriesOf(p) });
+  });
+  return Promise.allSettled([webrtcP, dnsP]);
+}
+
+/** 「可用性」单独重测：两个域名都连续采样（全量检测里 claude.ai 延迟复用 IP 漂移的采样） */
+function runAvail(put: Put) {
+  return Promise.allSettled([
+    sample(getTrace('claude.ai'), 'claude.ai', API_SAMPLES, 300).then((s) => put('avail.claude', judgeLatency(s))),
+    sample(getTrace('api.anthropic.com'), 'api.anthropic.com', API_SAMPLES, 300).then((s) => put('avail.api', judgeLatency(s))),
+    fetchStatus().then((s) => put('avail.status', judgeStatus(s))),
+  ]);
+}
+
+const rerunButtons = () => document.querySelectorAll<HTMLButtonElement>('#rerun, [data-rerun]');
+
+async function run() {
+  const my = ++runId;
+  const put = putFor(my);
+  const note = noteFor(my);
 
   results.clear();
   CHECKS.forEach((c) => renderRow(c.id));
   renderSummary();
   $('#announce')!.textContent = '';
-  const rerun = $<HTMLButtonElement>('#rerun')!;
-  rerun.disabled = true;
+  rerunButtons().forEach((b) => (b.disabled = true));
 
   // 环境指纹：同步读取
   const fp = readFingerprint();
   facts = { ...emptyFacts(), fp };
-  const note = (patch: Partial<CodeFacts>) => {
-    if (my === runId) Object.assign(facts, patch);
-  };
   put('fp.timezone', checkTimezone(fp));
   put('fp.language', checkLanguage(fp));
   put('fp.locale', checkLocale(fp));
@@ -280,7 +386,13 @@ async function run() {
   const traces = ANTHROPIC_DOMAINS.map((host) => getTrace(host));
   const [claudeP, apiP] = traces;
   const allTracesP = Promise.all(traces);
+  const exitListP = allTracesP.then((all) => all.filter((t): t is Trace => t !== null));
   const domesticP = getDomestic();
+  void Promise.all([exitListP, domesticP]).then(([exits, d]) => {
+    if (my !== runId) return;
+    lastExits = exits;
+    lastDomestic = d;
+  });
 
   const exitsP = Promise.all([
     claudeP.then((t) => put('exit.claude', judgeExit(t, 'claude.ai'))),
@@ -291,14 +403,6 @@ async function run() {
   ]);
 
   // 漂移与延迟：claude.ai 间隔 2 秒再采样，api.anthropic.com 连续再采样
-  const sample = async (first: Promise<Trace | null>, host: string, n: number, gap: number) => {
-    const list = [await first];
-    for (let i = 1; i < n; i++) {
-      await delay(gap);
-      list.push(await getTrace(host));
-    }
-    return list;
-  };
   const timingP = Promise.all([
     sample(claudeP, 'claude.ai', DRIFT_SAMPLES, DRIFT_INTERVAL_MS).then((s) => {
       put('exit.drift', judgeDrift(s));
@@ -328,56 +432,35 @@ async function run() {
     put('cross.language', judgeCrossLanguage(fp, cc));
   });
 
-  // 泄露
-  const webrtcP = Promise.all([probeWebrtc(), allTracesP, domesticP]).then(async ([p, all, d]) => {
-    const r = await judgeWebrtc(p, all.filter((t): t is Trace => t !== null), d);
-    put('leak.webrtc', r);
-    note({ webrtc: webrtcLeakOf(p, r) });
-  });
-  const dnsP = probeDns().then((p) => {
-    put('leak.dns', judgeDns(p));
-    note({ dnsCountries: dnsCountriesOf(p) });
-  });
-
+  const leaksP = runLeaks(put, note, exitListP, domesticP);
   const statusP = fetchStatus().then((s) => put('avail.status', judgeStatus(s)));
 
-  await Promise.allSettled([deviceP, exitsP, timingP, ipP, webrtcP, dnsP, statusP]);
-  if (my === runId) rerun.disabled = false;
+  await Promise.allSettled([deviceP, exitsP, timingP, ipP, leaksP, statusP]);
+  if (my === runId) rerunButtons().forEach((b) => (b.disabled = false));
 }
 
-// ---------- 复制报告（IP 一律打码，国内出口整项不写入） ----------
+const SECTION_CHECKS: Record<'leaks' | 'avail', CheckId[]> = {
+  leaks: ['leak.webrtc', 'leak.dns'],
+  avail: ['avail.claude', 'avail.api', 'avail.status'],
+};
 
-const partsText = (parts: Part[]) =>
-  parts.map((p) => (typeof p === 'string' ? p : 'ip' in p ? maskIp(p.ip) : '')).join('').trim();
-
-function buildReport(): string {
-  const c = counts();
-  const lines = [
-    'Claude 使用环境检测报告（IP 已打码）',
-    new Date().toLocaleString('zh-CN', { hour12: false }),
-    `异常 ${c.bad} · 注意 ${c.warn} · 正常 ${c.ok}${c.unknown ? ` · 未知 ${c.unknown}` : ''}`,
-    ...verdicts().map(([, name, v]) => `${name}：${v.unknown ? '无法判断' : v.pass ? '通过' : '不通过'}（${verdictText(v)}）`),
-  ];
-  for (const group of REPORT_GROUPS) {
-    lines.push('', `【${group.title}】`);
-    for (const check of group.checks) {
-      const r = results.get(check.id);
-      if (!r) continue;
-      const head = `[${r.status ? STATUS_LABEL[r.status] : '信息'}]`;
-      if (check.id === 'exit.domestic') {
-        lines.push(`${head} ${check.label}：已检测（报告不含国内 IP）`);
-        continue;
-      }
-      const body = [r.tag, partsText(r.value)].filter(Boolean).join(' · ') || '—';
-      lines.push(`${head} ${check.label}：${body}${r.reason ? `（${r.reason}）` : ''}`);
-      if (r.status === 'bad' || r.status === 'warn') {
-        for (const d of r.details ?? []) if (d.status) lines.push(`    ${d.label}：${partsText(d.value)}`);
-      }
-    }
+/** 分区单独重测；期间点「重新检测」会让这一轮作废 */
+async function rerunSection(kind: keyof typeof SECTION_CHECKS, btn: HTMLButtonElement) {
+  const my = runId;
+  btn.disabled = true;
+  for (const id of SECTION_CHECKS[kind]) {
+    results.delete(id);
+    renderRow(id);
   }
-  lines.push('', `检测地址：${location.origin}`);
-  return lines.join('\n');
+  renderSummary();
+  const put = putFor(my);
+  await (kind === 'leaks'
+    ? runLeaks(put, noteFor(my), Promise.resolve(lastExits), Promise.resolve(lastDomestic))
+    : runAvail(put));
+  if (my === runId) btn.disabled = false;
 }
+
+// ---------- 复制 ----------
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -447,6 +530,28 @@ $('#toggle-ip')?.addEventListener('click', (e) => {
 
 $('#rerun')?.addEventListener('click', () => void run());
 
+document.querySelectorAll<HTMLButtonElement>('[data-rerun]').forEach((btn) =>
+  btn.addEventListener('click', () => void rerunSection(btn.dataset.rerun as keyof typeof SECTION_CHECKS, btn)),
+);
+
+$('#copy-ip')?.addEventListener('click', async (e) => {
+  const value = (e.currentTarget as HTMLElement).dataset.ip;
+  if (value) toast((await copyText(value)) ? '已复制 IP' : '复制失败，请再点一次');
+});
+
+// 分区导航：顶部越过「跳转后标题停的位置 + 8px」的最后一个分区；滚到底时取最后一个
+const navLinks = [...document.querySelectorAll<HTMLAnchorElement>('.sectnav a')];
+function markSection() {
+  const line = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-h')) + 24;
+  const atBottom = innerHeight + scrollY >= document.documentElement.scrollHeight - 2;
+  let current: HTMLAnchorElement | undefined;
+  for (const a of navLinks) if (atBottom || ($(a.hash)?.getBoundingClientRect().top ?? Infinity) <= line) current = a;
+  navLinks.forEach((a) => (a === current ? a.setAttribute('aria-current', 'location') : a.removeAttribute('aria-current')));
+}
+addEventListener('scroll', markSection, { passive: true });
+addEventListener('resize', markSection);
+markSection();
+
 $('#copy-code')?.addEventListener('click', async (e) => {
   if (results.size < CHECKS.length || !facts.fp) return toast('还在检测，稍等几秒');
   if (!facts.signed) return toast(facts.ipQueried ? '结果码功能暂时不可用' : '没有查到 IP 属性，生成不了结果码，请重新检测');
@@ -454,11 +559,6 @@ $('#copy-code')?.addEventListener('click', async (e) => {
   if (Date.now() - facts.signedAt > (RESULT_CODE_TTL - 60) * 1000) return toast('检测已超过 1 小时，请重新检测后再复制');
   const code = composeResultCode(facts.signed, buildLocal(facts.fp, e.currentTarget as HTMLElement));
   toast((await copyText(code)) ? '已复制结果码，回到问卷粘贴' : '复制失败，请再点一次');
-});
-
-$('#copy')?.addEventListener('click', async () => {
-  if (results.size < CHECKS.length) return toast('还在检测，稍等几秒');
-  toast((await copyText(buildReport())) ? '已复制检测报告' : '复制失败，请手动截图');
 });
 
 void run();

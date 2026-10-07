@@ -2,7 +2,7 @@
 > 项目 overview（现在 + 未来）。已发布历史看 CHANGELOG.md，agent 指令看 CLAUDE.md。
 
 ## 当前主线
-0.9.0 — 待定（从 Backlog 置顶项选定后填写）
+0.9.0 — 检测站改版：参照 ipcheck.ing 的分区排版，默认显示 IP，只保留复制结果码
 
 ## Backlog
 - P2 数据清洗：看板 / 公开数据集出结论前，按 spec「数据清洗」逐条标记问题问卷，原始数据不改

@@ -1,0 +1,401 @@
+/* 检测站专用样式：分区 + IP 信息大卡 + 小卡片（DESIGN.md §3、§4.20–4.24）；共享 token 在 shared global.css */
+
+:root {
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --shadow-card: none;
+  }
+}
+
+.card {
+  box-shadow: var(--shadow-card);
+}
+
+.icon {
+  flex: none;
+}
+
+/* ---------- 分区导航（Header） ---------- */
+
+.sectnav {
+  display: none;
+  gap: 20px;
+  margin: 0 auto 0 32px;
+}
+
+@media (min-width: 900px) {
+  .sectnav {
+    display: flex;
+  }
+}
+
+.sectnav a {
+  color: var(--fg-muted);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.sectnav a:hover,
+.sectnav a[aria-current] {
+  color: var(--fg);
+}
+
+.sectnav a[aria-current] {
+  font-weight: 500;
+}
+
+/* ---------- 图标按钮 ---------- */
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+.icon-btn:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-subtle);
+  color: var(--fg);
+}
+
+.icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.icon-btn .icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* ---------- 分区 ---------- */
+
+.sect {
+  margin-top: 56px;
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.sect__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sect__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 24px;
+}
+
+.sect__title .icon {
+  width: 24px;
+  height: 24px;
+}
+
+.sect__desc {
+  max-width: 760px;
+  margin-top: 8px;
+  color: var(--fg-muted);
+}
+
+.sect__body {
+  margin-top: 20px;
+}
+
+.sect__sub {
+  margin: 24px 0 12px;
+  color: var(--fg-muted);
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.sect__sub span {
+  color: var(--fg-subtle);
+  font-weight: 400;
+}
+
+/* ---------- IP 信息大卡 ---------- */
+
+.ipcard__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 24px;
+  padding: 20px;
+}
+
+.ipcard__label {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.ipcard__ip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.ipcard__value {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.ipcard__value .flag {
+  width: 28px;
+  height: 21px;
+}
+
+.ipcard__value .skeleton {
+  width: 220px;
+  height: 28px;
+}
+
+.ipcard__note {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.ipcard__group {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.ipcard__group-title {
+  margin-bottom: 12px;
+  color: var(--fg-subtle);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 24px;
+}
+
+@media (min-width: 640px) {
+  .fields {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .fields {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.field {
+  min-width: 0;
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+.field__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.field__label .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.field__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.field .check__value {
+  justify-content: flex-start;
+}
+
+.field .skeleton {
+  width: 72px;
+}
+
+.field .check__reason {
+  margin-top: 4px;
+}
+
+/* ---------- 出口一览表 ---------- */
+
+.xcard {
+  padding: 12px 20px 4px;
+}
+
+.xcard .xtable {
+  margin-top: 0;
+}
+
+/* ---------- 小卡片网格 ---------- */
+
+.minis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.xcard + .minis {
+  margin-top: 16px;
+}
+
+.minis__group {
+  display: contents;
+}
+
+.cc,
+.mini {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+/* 检测卡 */
+.cc__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.cc .check__value {
+  justify-content: flex-start;
+  margin-top: 6px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.cc .skeleton {
+  width: 60%;
+}
+
+.cc .check__reason {
+  margin-top: 2px;
+}
+
+.cc .details {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+/* 泄露卡 */
+.mini__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.mini__num {
+  color: var(--fg-subtle);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.mini__sub {
+  color: var(--fg-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.mini__ip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  color: var(--ok);
+  font-size: 15px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.mini__ip::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.mini[data-status='warn'] .mini__ip {
+  color: var(--warn);
+}
+
+.mini[data-status='bad'] .mini__ip {
+  color: var(--bad);
+}
+
+.mini[data-status='unknown'] .mini__ip {
+  color: var(--unknown);
+}
+
+.mini[data-status='none'] .mini__ip {
+  color: var(--fg-subtle);
+}
+
+.mini[data-status='pending'] .mini__ip::before {
+  display: none;
+}
+
+.mini__ip .skeleton {
+  width: 60%;
+}
+
+.mini__note {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+/* 从「发现的问题」跳转过来时高亮目标 */
+.cc,
+.field {
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+.cc:target,
+.field:target {
+  animation: target-flash 1.6s ease-out;
+}

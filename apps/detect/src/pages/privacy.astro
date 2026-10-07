@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 import { ANTHROPIC_DOMAINS } from '../lib/catalog';
 ---
 
-<Base title="隐私说明 · claude-analysis" description="检测站收集什么、不收集什么，以及浏览器会访问哪些第三方服务。" current="privacy">
+<Base title="隐私说明 · claude-analysis" description="检测站收集什么、不收集什么，以及浏览器会访问哪些第三方服务。">
   <section class="hero">
     <h1>隐私说明</h1>
     <p>检测站不存任何数据。大部分检测在你的浏览器里完成；需要服务器参与的部分，下面逐条写明。</p>
@@ -12,7 +12,7 @@ import { ANTHROPIC_DOMAINS } from '../lib/catalog';
   <article class="prose">
     <h2>只留在你浏览器里的</h2>
     <ul>
-      <li><strong>国内出口 IP</strong>（你的宽带 IP）：只在本页显示，不会发给本站服务器，复制报告也不包含它。</li>
+      <li><strong>国内出口 IP</strong>（你的宽带 IP）：只在本页显示，不会发给本站服务器，结果码也不包含它。</li>
       <li><strong>环境指纹</strong>：时区、语言、区域格式、字体、浏览器与设备信息，全部在本地计算。</li>
       <li><strong>WebRTC 与 DNS 检测结果</strong>：只在本地比对和显示。WebRTC 拿到的 IP 是否在中国大陆，用本站自带的 APNIC 分配表在浏览器里判断，不查询任何服务器。</li>
       <li>

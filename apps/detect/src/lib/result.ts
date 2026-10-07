@@ -1,4 +1,4 @@
-// 检测结果的展示模型（检测脚本产出，渲染与复制报告消费）
+// 检测结果的展示模型（检测脚本产出，页面渲染消费）
 import type { Status } from '@claude-analysis/shared';
 
 /** 值片段：普通文本、按「显示 IP」开关打码的 IP、国旗（ISO 国家代码） */
@@ -8,6 +8,8 @@ export interface Detail {
   label: string;
   value: Part[];
   status?: Status;
+  /** 一句结论，泄露卡片用（如「与 Claude 出口一致」） */
+  note?: string;
 }
 
 export interface Result {
@@ -17,7 +19,7 @@ export interface Result {
   tag?: string;
   value: Part[];
   reason?: string;
-  /** 折叠的明细 */
+  /** 折叠的明细；泄露检测项则是逐个服务器的结果，画成泄露卡片 */
   details?: Detail[];
 }
 

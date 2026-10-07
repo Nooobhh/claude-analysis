@@ -25,7 +25,7 @@
  */
 import type { WebrtcLeak } from '@claude-analysis/shared';
 import { isMainlandIp } from '../cnip';
-import { fetchWithTimeout, type Trace } from '../net';
+import { countryName, fetchWithTimeout, type Trace } from '../net';
 import { flag, ip, type Detail, type Result } from '../result';
 import type { Domestic } from './exits';
 
@@ -166,10 +166,12 @@ export async function judgeWebrtc(probes: WebrtcProbe[] | undefined, exits: Trac
   };
   const seen = await Promise.all(probes.map(async (p) => ({ ...p, ...(p.ip ? await classify(p.ip) : { kind: null, cc: undefined }) })));
 
+  const NOTE = { same: '与 Claude 出口一致', mainland: '中国大陆 IP，绕过了代理', other: '与 Claude 出口不同' };
   const details: Detail[] = seen.map((p) => ({
     label: p.server.replace(/^stun:/, '').replace(/:\d+$/, ''),
     value: p.ip ? [...flag(p.cc), ip(p.ip)] : ['无结果'],
     status: p.kind === 'mainland' ? 'bad' : p.kind === 'other' ? 'warn' : undefined,
+    note: p.kind ? NOTE[p.kind] : 'UDP 没有响应',
   }));
   // 出口 IP 列：去重后的 UDP 出口
   const uniq = [...new Map(seen.filter((p) => p.ip).map((p) => [p.ip, p])).values()];
@@ -198,13 +200,15 @@ export function judgeDns(probe: DnsProbe | null): Result {
   if (!probe) return { status: 'unknown', tag: '检测失败', value: ['—'], reason: 'DNS 检测接口都没有返回' };
   const { resolvers, provider } = probe;
   const levelOf = (cc: string | null) => (cc === 'CN' ? 'bad' : cc === 'HK' || cc === 'MO' ? 'warn' : undefined);
-  // 出口 IP 列只放第一个解析器，其余进明细
+  // 出口 IP 列只放第一个解析器，逐个结果进泄露卡片
   const first = resolvers[0];
   const value = [...flag(first.cc), ip(first.ip), resolvers.length > 1 ? ` 等 ${resolvers.length} 个` : ''];
-  const details: Detail[] | undefined =
-    resolvers.length > 1
-      ? resolvers.map((r) => ({ label: r.org ?? '解析器', value: [...flag(r.cc), ip(r.ip)], status: levelOf(r.cc) }))
-      : undefined;
+  const details: Detail[] = resolvers.map((r) => ({
+    label: r.org ?? '运营商未知',
+    value: [...flag(r.cc), ip(r.ip)],
+    status: levelOf(r.cc),
+    note: r.cc ? countryName(r.cc) : '位置未知',
+  }));
   const who = resolvers.length === 1 && first.org ? `${first.org} · ` : '';
   const source = `数据来源 ${provider}`;
   if (resolvers.some((r) => r.cc === 'CN')) {
