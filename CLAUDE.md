@@ -19,6 +19,7 @@
 - 扣分权重是初始值，改权重先改 board.md「环境判定」，检测站与看板同时生效
 
 ## 关键文件 / 命令
+- 开发 / 部署 / secret 配置细节在 `docs/development.md`（README 只做项目介绍，不放命令）
 - 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），问卷站 `apps/data`（Astro 7 静态页 + CF Worker + D1）
 - 两站共用的类型与样式 token 在 `packages/shared`（样式 `styles/global.css`）；两站互不导入对方代码
 - 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）、`pnpm dev:data`（问卷站 :4322，`/api` 代理到 :8788）、`pnpm dev:data-worker`（问卷站 Worker + 本地 D1 :8788）

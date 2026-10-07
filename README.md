@@ -3,83 +3,52 @@
 
 ## 是什么
 
-检测站：<https://claude-analysis.ohaze.workers.dev> ｜ 源码：<https://github.com/Nooobhh/claude-analysis>
+检测站：<https://claude-analysis.ohaze.workers.dev> ｜ 问卷站：<https://claudeban.ohaze.workers.dev> ｜ 源码：<https://github.com/Nooobhh/claude-analysis>
 
-两个站，一个仓库。检测站是项目主体、长期维护；问卷站是阶段性的附属站点，用来收集封号数据：
+一个仓库，两个站：
 
-- **检测站**：在浏览器里检测你访问 Claude 时的网络环境——Claude 各域名的出口 IP 是否一致、IP 是否漂移、IP 属性与风险标记、系统时区 / 语言 / 字体等环境指纹、WebRTC 与 DNS 泄露、服务可用性；结论卡给出网络环境、设备指纹是否通过及扣分明细（规则公开，不显示分数）。
-- **问卷站**（claudeban.ohaze.workers.dev）：匿名问卷收集使用环境与封号结果，检测结果复制「结果码」即可带入；数据汇总页 `/board` 用散点图按环境、行为把问卷分进四个象限（一个点一份问卷），下面分账号情况、网络环境、使用习惯三块比较各项与封号的关系。问卷站不读取、不保存 IP。
+- **检测站**是项目主体，长期维护。打开网页就在浏览器里检测你访问 Claude 时的网络环境和设备指纹，几秒钟出结论，不用注册、不装插件。
+- **问卷站**是阶段性的附属站点，用来匿名收集「什么环境、什么用法下被封了号」。数据收集够了以后可能下线，检测站不受影响。
 
 ## 为什么
 
-现有的检测站只告诉你「IP 干不干净」，没人知道哪些环境因素真的和封号相关。本项目用众包数据回答这个问题，并且把代码和隐私处理全部公开，让人放心填写。
+国内用 Claude 的人最常问的是「我的环境会不会被封」。现有的检测站大多只回答「IP 干不干净」，再给一个看不出依据的分数；至于哪些因素真的和封号相关，没有人拿数据说过话。
 
-## 架构
+这个项目想把两件事都做实：
 
-```
-检测站（Cloudflare Workers，不存数据）
-  浏览器本地：各出口 IP、指纹、WebRTC、DNS 泄露
-  Worker：/api/ip（查 IP 属性）、/api/status（服务状态中转）
-        │ 结果码（签名，不含原始 IP；用户复制粘贴）
-        ▼
-问卷站 claudeban（Cloudflare Workers，唯一存数据的地方，不读取 IP）
-  问卷 / 看板（/api/board 只下发汇总份数）/ 之后：教程、公开聚合数据
-```
+- **检测要有依据**：每一项都写明判定规则和理由，几家数据库结论不一致时并排列出来，不替你选边，也不给综合打分。
+- **结论要靠数据**：用众包问卷把「环境」和「封号结果」对上号，公开汇总统计，让大家看到哪些因素和封号有关、哪些只是心理作用。
 
-## 常用命令
+代码和隐私处理全部公开，每个页面页脚的 commit 链接就是线上正在运行的代码，可以逐行核对。
 
-需要 Node 22+ 和 pnpm 10。
+## 检测站能看到什么
 
-```bash
-pnpm install
-pnpm dev          # 检测站前端 http://localhost:4321（/api 代理到 :8787）
-pnpm dev:worker   # 构建后用 wrangler dev 跑 Worker + 静态资源 http://localhost:8787
-pnpm dev:data     # 问卷站前端 http://localhost:4322（/api 代理到 :8788）
-pnpm dev:data-worker  # 构建后用 wrangler dev 跑问卷站 Worker + 本地 D1 http://localhost:8788
-pnpm build        # 构建检测站到 apps/detect/dist
-pnpm typecheck    # 生成 Worker 类型，检查两站与 Worker 的类型
-pnpm run deploy   # 本地手动部署检测站，仅应急用（需先 wrangler login；不能省略 run）
-pnpm run deploy:data  # 同上，部署问卷站
-```
+页面顶部是结论卡：异常 / 注意 / 正常各几项，「网络环境」「设备指纹」两项是否通过，以及「发现的问题」列表（点一下跳到对应位置）。下面分五个区：
 
-## 部署
+- **IP 信息**：Claude 看到的出口 IP，以及地区、是否原生 IP、网络类型（家庭宽带 / 企业线路 / 机房 / 移动网络等）、ASN、运营商、位置；VPN、代理、Tor、滥用记录、风险分等风险标记。proxycheck.io 与 ipapi.is 同时查询。
+- **出口一览**：claude.ai、api.anthropic.com、国内网站、WebRTC、DNS 解析器各走哪个出口，放在一张表里对比；另外检查 Claude 是否走了代理、8 个 Anthropic 域名的出口是否一致、10 秒内出口 IP 有没有变。
+- **泄露检测**：WebRTC 每个 STUN 服务器、每个 DNS 解析器各一张卡，看有没有绕过代理暴露国内 IP 或国内解析器。可以单独重测。
+- **可用性**：到 claude.ai 和 api.anthropic.com 的延迟，以及 Claude 官方服务状态。可以单独重测。
+- **环境指纹**：系统时区、浏览器语言、区域格式、中文字体、国产浏览器 / 设备；再交叉比对时区、语言与 IP 所在地是否矛盾。
 
-推送到 `main` 后由 GitHub Actions（`.github/workflows/deploy.yml`）自动做类型检查，并先后部署检测站与问卷站（claudeban.ohaze.workers.dev）到 Cloudflare Workers。页脚显示的 commit 就是线上正在运行的代码，可以点开核对。
+IP 默认完整显示，右上角「显示 IP」可以关掉打码，方便截图求助。
 
-仓库需要配置：
+## 问卷与数据汇总
 
-- Secret `CLOUDFLARE_API_TOKEN`：在 Cloudflare 用「Edit Cloudflare Workers」模板创建
-- Secret `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID（放 Secret 是为了在公开的 Actions 日志里被屏蔽）
-
-Worker 运行时用到的 secret（见下方「配置」）存在 Cloudflare 上，部署不会覆盖。
-
-问卷站的数据存在 Cloudflare D1（数据库 `claudeban`），表结构在 `apps/data/migrations/`。CI 不改表结构；新增 migration 后，先在本地执行 `pnpm --filter @claude-analysis/data exec wrangler d1 migrations apply claudeban --remote`，再推送部署。
-
-## 配置
-
-Worker 用到的 secret（线上用 `wrangler secret put <名字>` 设置，本地写进 `apps/detect/.dev.vars`）：
-
-| 名字 | 必需 | 作用 |
-|---|---|---|
-| `IP_HASH_SALT` | 是 | IP 缓存与限频 key 的哈希盐；缺失时不缓存 |
-| `PROXYCHECK_KEY` | 线上是 | [proxycheck.io](https://proxycheck.io) 免费账号 key（每天 1000 次）。Workers 出口 IP 多人共享，匿名额度在线上基本被占满 |
-| `IPAPI_KEY` | 否 | [ipapi.is](https://ipapi.is) 免费账号 key（每天 1000 次）；配置后与 proxycheck 并行查询，风险项取并集（注册需用非代理网络） |
-| `IPINFO_TOKEN` | 否 | ipinfo.io token；前两个都失败时的兜底，只有基础属性 |
-| `RESULT_CODE_KEY` | 否 | 结果码签名私钥（Ed25519，PKCS#8 base64），对应公钥写在问卷站 `apps/data/src/lib/result-code.ts`；未配置时检测页不能复制结果码 |
-
-中国大陆 IPv4 段（`apps/detect/public/cn-ipv4.bin`，用于本地判断 WebRTC 泄露的 IP）从 APNIC 分配表生成，刷新：`pnpm --filter @claude-analysis/detect gen:cn-ipv4`。
+- **填问卷**：问卷分五步（账号状态、账号来历、网络环境、使用习惯、确认提交），大部分是选择题。网络环境一步可以选「用检测站自动获取」，粘贴检测站的「结果码」，免得手填；结果码只含检测结论、不含任何 IP，IP 属性带检测站签名，问卷站能确认没被改过。
+- **之后更新**：提交后会给一个管理链接，账号后来被封或申诉恢复了，可以回来更新状态，也可以整份删除。问卷加了新题时，已提交的问卷可以选择补答。
+- **看数据汇总**：问卷站的「数据汇总」页用一张散点图把问卷按「使用环境干不干净」「用法有没有违规」分进四个象限，一个点代表一份问卷；下面分账号情况、网络环境、使用习惯三块，比较各个选项的被封占比。样本少的数字会标「低样本」，不藏也不夸大。
 
 ## 隐私原则
 
-- 国内出口 IP（即你的真实宽带 IP）只在你的浏览器里显示，不会发往任何服务器
-- 服务器只收到用于查询属性的 Claude 出口 IP，缓存用加盐 hash、24 小时过期，不记访问日志
-- 环境指纹全部在本地计算，不上传；「复制结果码」在浏览器里拼装，不发送数据，结果码不含任何 IP
-- 没有任何统计、广告或追踪脚本
-- 页面会访问哪些第三方服务，隐私页逐个列明
+- 国内出口 IP（你的真实宽带 IP）只在你的浏览器里显示，不会发往任何服务器
+- 检测站服务器只收到用于查询属性的 Claude 出口 IP，缓存 key 用加盐哈希、24 小时过期，不记访问日志
+- 环境指纹全部在本地计算，不上传；结果码在浏览器里拼装，不含任何 IP，只有你自己粘贴进问卷它才会离开设备
+- 问卷站不读取、不保存 IP，不收集邮箱和账号；数据汇总只下发各组份数，看不到任何一份问卷的答案
+- 没有统计、广告或追踪脚本，不从 CDN 加载脚本和字体；浏览器会访问哪些第三方服务，两站的隐私页都逐个列明
 
 ## 致谢
 
-- [FuckClaude](https://github.com/LinXiaoTao/FuckClaude)（MIT）— 环境指纹检测思路
 - [MyIP](https://github.com/jason5ng32/MyIP)（MIT）— IP / WebRTC / DNS 泄露检测思路
 - [flag-icons](https://github.com/lipis/flag-icons)（MIT）— 国旗图标
 - [APNIC](https://www.apnic.net) 分配数据 — 中国大陆 IP 段
