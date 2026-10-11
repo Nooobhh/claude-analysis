@@ -1,14 +1,12 @@
 ---
 // 看板 /board：整页围绕一张散点图，一个点 = 一份问卷；数据来自 /api/board（只有份数，没有单份问卷）。
 // 样式见 DESIGN.md §3.2、§4.15–4.19，统计口径与分组规则见 docs/specs/board.md
-import { ENV_PASS_SCORE, FINGERPRINT_WARN, NETWORK_WARN } from '@claude-analysis/shared';
+import { FINGERPRINT_WARN, NETWORK_WARN } from '@claude-analysis/shared';
 import Base from '../layouts/Base.astro';
+import { ENV_WARN_LIMIT } from '../lib/board';
 import '../styles/board.css';
 
-const rules = (warn: typeof NETWORK_WARN) =>
-  Object.values(warn)
-    .map(([label, points]) => `${label} −${points}`)
-    .join(' · ');
+const warns = [...Object.values(NETWORK_WARN), ...Object.values(FINGERPRINT_WARN)].map(([label]) => label).join(' · ');
 ---
 
 <Base title="问卷数据汇总 · claude-analysis" description="按使用环境和用户行为分组，比较 Claude 账号被封的情况。只展示汇总，不展示单份问卷。" current="board">
@@ -29,14 +27,14 @@ const rules = (warn: typeof NETWORK_WARN) =>
   <details class="rules" id="rules">
     <summary>怎么判定「环境干净」「行为干净」</summary>
     <ul>
-      <li>环境干净：网络环境、设备指纹都通过。两类各从 100 分起扣，扣到 {ENV_PASS_SCORE} 分以下不通过；只显示通过与否，不显示分数。账号环境、支付环境只展示，不进判定。</li>
-      <li>网络环境（检测站样本）：任何一项「异常」直接不通过；「注意」扣分：{rules(NETWORK_WARN)}。</li>
-      <li>设备指纹（检测站样本）：「注意」扣分：{rules(FINGERPRINT_WARN)}。检测时的系统不在填写的设备系统里的，设备指纹不算数。</li>
+      <li>环境干净：网络环境、设备指纹的检测项里没有「异常」，「注意」合计不超过 {ENV_WARN_LIMIT} 个。账号环境、支付环境只展示，不进判定。</li>
+      <li>检测站样本的「异常」：未走代理、出口不在支持地区、多个出口、IP 漂移、WebRTC 泄露大陆 IP、国内 DNS 解析器、两家都标记 VPN / 代理 / Tor / 滥用、高风险分。</li>
+      <li>检测站样本的「注意」：{warns}。检测时的系统不在填写的设备系统里的，设备指纹不算数。</li>
       <li>
-        手动填写的样本：出口在不支持地区或节点会自动切换，网络环境不通过；设备指纹按中国时区扣 60、其他时区扣 20、中文系统扣 20、用过国产手机或浏览器扣 30。
+        手动填写的样本：出口在不支持地区或节点会自动切换算「异常」；「注意」按对应的检测项折算：中国时区算 2 个、其他时区 1 个，中文系统 3 个（出口不在中文地区再加 1 个），用过国产手机或浏览器 1 个。
       </li>
-      <li>扣分权重是初始值，与检测站结论卡用的是同一套，等「封禁通知里写的原因」攒够样本再校准。</li>
-      <li>行为干净：自己注册或公司分配、只有本人用、没用逆向或反代、从不破限、没有蒸馏。问卷第 1 版没问蒸馏，按问到的题判断。</li>
+      <li>检测站结论卡用的是另一套加权扣分，结论可能和这里不同。</li>
+      <li>行为干净：自己注册或公司分配、只有本人用、没用逆向或反代、从不破限、没有蒸馏、没有网络安全 / 批量生成 / 自动化脚本这类用途、对话不涉及敏感话题。旧版问卷没问到的题跳过，按问到的题判断。</li>
       <li>同一网络或设备下有多个账号、代充单独标为异常行为，不算违规项。</li>
       <li>「不便回答」、出口「不清楚」等算无法判定，这类问卷不画进散点图；检测失败的项跳过。</li>
       <li>被封过 = 已被封禁或被封后申诉恢复。区间为 Wilson 95% 区间；少于 30 份标「低样本」，数字照样显示。</li>

@@ -264,7 +264,7 @@ function renderIssues(finished: boolean) {
   );
 }
 
-/** 环境结论：网络环境、设备指纹通过与否（规则在 shared scoring.ts，与问卷站看板共用）；不显示分数与扣分明细 */
+/** 环境结论：网络环境、设备指纹通过与否（规则在 shared scoring.ts）；不显示分数与扣分明细 */
 function verdicts(): Array<[kind: 'network' | 'fingerprint', name: string, v: EnvVerdict]> {
   const status = Object.fromEntries([...results].flatMap(([id, r]) => (r.status ? [[id, r.status]] : [])));
   return [

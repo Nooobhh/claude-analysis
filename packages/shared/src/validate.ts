@@ -36,6 +36,7 @@ import {
   TEXT_LIMITS,
   TIMEZONE_SETTING,
   USAGE_CAP,
+  normalizeSensitiveTopic,
   type CardInfo,
   type ExitType,
   type ManualEnv,
@@ -190,9 +191,7 @@ function answers(v: unknown, today: string, version: SurveyVersion, legacy = fal
     jailbreak: one(JAILBREAK, a.jailbreak, 'jailbreak'),
     distill: added(2, version, a.distill, () => one(DISTILL, a.distill, 'distill')),
     sensitiveUse: added(2, version, a.sensitiveUse, () => many(SENSITIVE_USE, a.sensitiveUse, 'sensitiveUse', ['none', 'decline'])),
-    sensitiveTopic: added(3, version, a.sensitiveTopic, () =>
-      many(SENSITIVE_TOPIC, a.sensitiveTopic, 'sensitiveTopic', ['none', 'decline']),
-    ),
+    sensitiveTopic: added(3, version, a.sensitiveTopic, () => one(SENSITIVE_TOPIC, normalizeSensitiveTopic(a.sensitiveTopic), 'sensitiveTopic')),
     note: optText(a.note, 'note', TEXT_LIMITS.note),
   };
 }

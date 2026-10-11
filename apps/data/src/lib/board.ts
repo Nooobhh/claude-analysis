@@ -79,6 +79,9 @@ export const BOARD_VERSION = 2;
 /** 少于这个份数标「低样本」 */
 export const MIN_N = 30;
 
+/** 环境判定：网络环境、设备指纹两类合计的「注意」超过这个数，环境有问题（规则见 board.md「环境判定」） */
+export const ENV_WARN_LIMIT = 3;
+
 export const total = (c: Counts) => c.banned + c.restored + c.active;
 /** 被封过 = 已被封禁 + 被封后申诉恢复 */
 export const bannedEver = (c: Counts) => c.banned + c.restored;

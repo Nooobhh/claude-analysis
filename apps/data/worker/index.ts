@@ -4,6 +4,7 @@ import {
   STATUS_FIELDS,
   SUPPLEMENT_FIELDS,
   normalizeExitType,
+  normalizeSensitiveTopic,
   importVerifyKey,
   validateAnswers,
   validateLocalSnapshot,
@@ -13,6 +14,7 @@ import {
   type DetectSnapshot,
   type ManageResponse,
   type ManagedSubmission,
+  type SensitiveTopic,
   type StatsResponse,
   type SubmitResponse,
   type SurveyAnswers,
@@ -117,6 +119,12 @@ function readEnv(text: string): ManagedSubmission['env'] {
   return { ...e, exitType: normalizeExitType(e.exitType) };
 }
 
+/** 读库里的答案：早期问卷 E10 的多选换成是 / 否（库里不改） */
+function readAnswers(text: string): SurveyAnswers {
+  const a = JSON.parse(text) as SurveyAnswers;
+  return a.sensitiveTopic === undefined ? a : { ...a, sensitiveTopic: normalizeSensitiveTopic(a.sensitiveTopic) as SensitiveTopic };
+}
+
 // ---------- 已收集份数 ----------
 
 // 每个 isolate 缓存 60 秒，少查 D1（Cache API 在 workers.dev 上不起作用）
@@ -148,7 +156,7 @@ async function handleBoard(env: Env): Promise<Response> {
     try {
       const { results } = await env.DB.prepare('SELECT answers, env, snapshot FROM submissions').all<{ answers: string; env: string; snapshot: string | null }>();
       const subs: Sub[] = results.map((r) => ({
-        answers: JSON.parse(r.answers) as SurveyAnswers,
+        answers: readAnswers(r.answers),
         env: readEnv(r.env),
         snapshot: r.snapshot ? (JSON.parse(r.snapshot) as DetectSnapshot) : null,
       }));
@@ -186,7 +194,7 @@ async function load(row: Row, env: Env): Promise<ManagedSubmission> {
     .all<{ status: ManagedSubmission['events'][number]['status']; on_date: string }>();
   return {
     v: row.v,
-    answers: JSON.parse(row.answers) as SurveyAnswers,
+    answers: readAnswers(row.answers),
     env: readEnv(row.env),
     createdOn: row.created_on,
     updatedOn: row.updated_on,
@@ -210,7 +218,7 @@ async function handleUpdate(req: Request, env: Env): Promise<Response> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return reply({ ok: false, error: 'bad_request' }, 400);
   const body = input as Record<string, unknown>;
 
-  const current = JSON.parse(row.answers) as SurveyAnswers;
+  const current = readAnswers(row.answers);
   const merged: Record<string, unknown> = { ...current };
   if ('supplement' in body) {
     const s = body.supplement;

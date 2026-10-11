@@ -45,7 +45,7 @@ import '../styles/survey.css';
           <div class="qs">
             <Question id="distill" num="E8" label="有没有用 Claude 的回答训练或微调别的模型（蒸馏）" hint="只用于统计，选「不便回答」也没关系" options={DISTILL} />
             <Question id="sensitiveUse" num="E9" label="有没有这些用途" options={SENSITIVE_USE} multi exclusive={['none', 'decline']} />
-            <Question id="sensitiveTopic" num="E10" label="对话有没有涉及这些敏感话题" hint="只用于统计，选「不便回答」也没关系" options={SENSITIVE_TOPIC} multi exclusive={['none', 'decline']} />
+            <Question id="sensitiveTopic" num="E10" label="对话是否涉及敏感话题" hint="如国产芯片、军工等高精尖技术研究，或恐怖主义、武器、暴力等危害社会安全的话题。只用于统计，选「不便回答」也没关系" options={SENSITIVE_TOPIC} />
           </div>
           <div class="survey__nav">
             <button class="btn btn--primary" id="supplement-save" type="submit">保存补充</button>

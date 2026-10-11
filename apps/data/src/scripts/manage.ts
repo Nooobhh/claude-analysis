@@ -171,7 +171,7 @@ function answerRows({ answers: a, env: e }: ManagedSubmission): Array<[string, s
     ['破限或 NSFW', JAILBREAK[a.jailbreak]],
     ['蒸馏', a.distill && DISTILL[a.distill]],
     ['用途', a.sensitiveUse?.map((u) => SENSITIVE_USE[u]).join('、')],
-    ['敏感话题', a.sensitiveTopic?.map((t) => SENSITIVE_TOPIC[t]).join('、')],
+    ['敏感话题', a.sensitiveTopic && SENSITIVE_TOPIC[a.sensitiveTopic]],
     ['补充', a.note],
   ];
   return rows.filter((r): r is [string, string] => !!r[1]);
@@ -335,11 +335,11 @@ supForm.addEventListener('submit', async (e) => {
   const checkedOf = (name: string) => [...supForm.querySelectorAll<HTMLInputElement>(`input[name="${name}"]:checked`)].map((i) => i.value);
   const distill = shown(supQ('distill')) ? (checkedOf('distill')[0] as Distill | undefined) : undefined;
   const uses = shown(supQ('sensitiveUse')) ? (checkedOf('sensitiveUse') as SensitiveUse[]) : [];
-  const topics = shown(supQ('sensitiveTopic')) ? (checkedOf('sensitiveTopic') as SensitiveTopic[]) : [];
+  const topic = shown(supQ('sensitiveTopic')) ? (checkedOf('sensitiveTopic')[0] as SensitiveTopic | undefined) : undefined;
   const payload: SupplementRequest = {
-    supplement: { distill, sensitiveUse: uses.length ? uses : undefined, sensitiveTopic: topics.length ? topics : undefined },
+    supplement: { distill, sensitiveUse: uses.length ? uses : undefined, sensitiveTopic: topic },
   };
-  if (!distill && !uses.length && !topics.length) return toast('还没选任何答案');
+  if (!distill && !uses.length && !topic) return toast('还没选任何答案');
   const btn = document.querySelector<HTMLButtonElement>('#supplement-save')!;
   btn.disabled = true;
   const r = await api<ManageResponse>('PATCH', payload);

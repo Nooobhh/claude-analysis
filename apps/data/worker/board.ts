@@ -1,6 +1,6 @@
 // 看板汇总：把每份问卷判成「环境干净 / 有问题 / 无法判定」「行为干净 / 有违规项 / 无法判定」（用于散点图），
 // 再按账号情况 / 网络环境 / 使用习惯三块数份数。规则与 docs/specs/board.md 一致，改规则先改 spec；
-// 网络环境、设备指纹的扣分规则在 shared scoring.ts，与检测站结论卡共用。只在服务器上跑，下发的只有份数
+// 环境按「异常」和「注意」个数判定，不用检测站结论卡的扣分（只沿用 scoring.ts 的检测项清单）。只在服务器上跑，下发的只有份数
 import {
   ACCOUNT_SOURCE,
   ACCOUNTS_IN_ENV,
@@ -12,9 +12,10 @@ import {
   CHAT_LANGUAGE,
   EMAIL_TYPE,
   ENV_BAN_HISTORY,
-  ENV_PASS_SCORE,
+  FINGERPRINT_CHECKS,
   LEGACY_BAN_TRIGGER,
   LOGIN_METHOD,
+  NETWORK_CHECKS,
   PAYMENT_METHOD,
   PHONE_VERIFY,
   PLAN,
@@ -23,18 +24,15 @@ import {
   SUPPORTED_COUNTRIES,
   USAGE_CAP,
   ZH_SPEAKING,
-  judgeFingerprint,
-  judgeNetwork,
   type AccountStatus,
   type CardInfo,
   type CheckId,
   type DetectSnapshot,
-  type EnvVerdict,
   type ManagedSubmission,
   type ManualEnv,
   type SurveyAnswers,
 } from '@claude-analysis/shared';
-import type { BoardData, BoardDim, BoardGroup, BoardPart, BoardRow, Counts, PairDim, QuadKey } from '../src/lib/board';
+import { ENV_WARN_LIMIT, type BoardData, type BoardDim, type BoardGroup, type BoardPart, type BoardRow, type Counts, type PairDim, type QuadKey } from '../src/lib/board';
 
 export interface Sub {
   answers: SurveyAnswers;
@@ -46,36 +44,41 @@ type Tri = 'clean' | 'problem' | 'unknown';
 
 /** 任一项有问题即有问题；否则任一项无法判定即无法判定 */
 const combine = (parts: Tri[]): Tri => (parts.includes('problem') ? 'problem' : parts.includes('unknown') ? 'unknown' : 'clean');
-const triOf = (v: EnvVerdict): Tri => (v.unknown ? 'unknown' : v.pass ? 'clean' : 'problem');
 
 /** 数据清洗「检测设备不是使用设备」：检测时的系统不在 E2 里，设备指纹不代表实际用 Claude 的设备 */
 const fpUsable = (s: Sub) => !s.snapshot || s.snapshot.local.fp.os === 'other' || s.answers.os.includes(s.snapshot.local.fp.os);
 const manual = (s: Sub): ManualEnv | null => (s.env.source === 'manual' ? s.env.answers : null);
 
-/** 网络环境：检测站样本按 scoring.ts；手动样本出口在不支持地区、节点会自动切换直接不通过，出口不清楚无法判定 */
-export function networkOf(s: Sub): Tri {
-  if (s.snapshot) return triOf(judgeNetwork(s.snapshot.local.status));
-  const m = manual(s);
-  if (!m) return 'unknown';
+/** 检测站样本：任一项「异常」或「注意」合计超过 3 个即有问题；没到有问题时，一类全是未知、或设备指纹不算数，记为无法判定 */
+function detectEnvOf(s: Sub, status: DetectSnapshot['local']['status']): Tri {
+  const fp = fpUsable(s);
+  const ids = fp ? [...NETWORK_CHECKS, ...FINGERPRINT_CHECKS] : NETWORK_CHECKS;
+  if (ids.some((id) => status[id] === 'bad') || ids.filter((id) => status[id] === 'warn').length > ENV_WARN_LIMIT) return 'problem';
+  const known = (list: readonly CheckId[]) => list.some((id) => status[id] && status[id] !== 'unknown');
+  return fp && known(NETWORK_CHECKS) && known(FINGERPRINT_CHECKS) ? 'clean' : 'unknown';
+}
+
+/** 手动样本折算成对应检测项的「注意」个数（见 spec）；「不清楚」跳过 */
+const manualWarns = (m: ManualEnv) =>
+  (m.timezone === 'cn' ? 2 : m.timezone === 'other' ? 1 : 0) +
+  (m.language === 'zh' ? 3 + (m.exitRegion !== null && !ZH_SPEAKING.has(m.exitRegion) ? 1 : 0) : 0) +
+  (m.cnClient === 'yes' ? 1 : 0);
+
+/** 手动样本：出口在不支持地区、节点会自动切换算异常；没到有问题时出口不清楚记为无法判定 */
+function manualEnvOf(m: ManualEnv): Tri {
   if ((m.exitRegion !== null && !SUPPORTED_COUNTRIES.has(m.exitRegion)) || m.nodeSwitch === 'auto') return 'problem';
+  if (manualWarns(m) > ENV_WARN_LIMIT) return 'problem';
   return m.exitRegion === null ? 'unknown' : 'clean';
 }
 
-/** 手动样本的设备指纹扣分（与检测站对应项的权重折算，见 spec）；「不清楚」跳过 */
-const manualFpPoints = (m: ManualEnv) =>
-  (m.timezone === 'cn' ? 60 : m.timezone === 'other' ? 20 : 0) + (m.language === 'zh' ? 20 : 0) + (m.cnClient === 'yes' ? 30 : 0);
-
-export function fingerprintOf(s: Sub): Tri {
-  if (s.snapshot) return fpUsable(s) ? triOf(judgeFingerprint(s.snapshot.local.status)) : 'unknown';
+/** 环境只看网络环境、设备指纹；账号、支付相关的题只在账号情况里展示，不进判定 */
+export function envOf(s: Sub): Tri {
+  if (s.snapshot) return detectEnvOf(s, s.snapshot.local.status);
   const m = manual(s);
-  if (!m) return 'unknown';
-  return 100 - manualFpPoints(m) < ENV_PASS_SCORE ? 'problem' : 'clean';
+  return m ? manualEnvOf(m) : 'unknown';
 }
 
-/** 环境干净 = 网络环境、设备指纹都通过；账号、支付相关的题只在账号情况里展示，不进判定 */
-export const envOf = (s: Sub): Tri => combine([networkOf(s), fingerprintOf(s)]);
-
-/** 违规项：买号或拼车、多人共用、反代、破限、蒸馏；没问到的题（第 1 版没有 E8）跳过 */
+/** 违规项：买号或拼车、多人共用、反代、破限、蒸馏、高危用途、敏感话题；没问到的题（旧版没有 E8–E10）跳过 */
 export function behaviorOf({ answers: a }: Sub): Tri {
   const parts: Tri[] = [
     a.source === 'bought' || a.source === 'shared' ? 'problem' : 'clean',
@@ -84,6 +87,8 @@ export function behaviorOf({ answers: a }: Sub): Tri {
     a.jailbreak === 'never' ? 'clean' : a.jailbreak === 'decline' ? 'unknown' : 'problem',
   ];
   if (a.distill) parts.push(a.distill === 'no' ? 'clean' : a.distill === 'decline' ? 'unknown' : 'problem');
+  if (a.sensitiveUse) parts.push(a.sensitiveUse.includes('none') ? 'clean' : a.sensitiveUse.includes('decline') ? 'unknown' : 'problem');
+  if (a.sensitiveTopic) parts.push(a.sensitiveTopic === 'no' ? 'clean' : a.sensitiveTopic === 'decline' ? 'unknown' : 'problem');
   return combine(parts);
 }
 
@@ -315,17 +320,7 @@ const USAGE: GroupDef[] = [
           return [u.includes('decline') ? 'decline' : u.includes('none') ? 'no' : 'yes'];
         },
       },
-      {
-        q: 'E10',
-        title: '敏感话题',
-        labels: HAS,
-        // 选了高精尖技术研究、危害社会安全任一为「有」
-        pick: (s) => {
-          const t = s.answers.sensitiveTopic;
-          if (!t) return null;
-          return [t.includes('decline') ? 'decline' : t.includes('none') ? 'no' : 'yes'];
-        },
-      },
+      { q: 'E10', title: '敏感话题', labels: HAS, pick: (s) => one(s.answers.sensitiveTopic) },
     ],
   },
 ];

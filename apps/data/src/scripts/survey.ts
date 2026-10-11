@@ -273,7 +273,7 @@ function build(): { data: SurveySubmission | null; errors: Map<string, string> }
     jailbreak: pick<Jailbreak>('jailbreak'),
     distill: pick<Distill>('distill'),
     sensitiveUse: pickMany<SensitiveUse>('sensitiveUse'),
-    sensitiveTopic: pickMany<SensitiveTopic>('sensitiveTopic'),
+    sensitiveTopic: pick<SensitiveTopic>('sensitiveTopic'),
     note: text('note') || undefined,
   };
 

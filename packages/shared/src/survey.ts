@@ -321,14 +321,21 @@ export const SENSITIVE_USE = {
 } as const;
 export type SensitiveUse = keyof typeof SENSITIVE_USE;
 
-/** 第 3 版新增；多选，none、decline 与其他选项互斥 */
+/** 第 3 版新增；话题类别写在题目说明里，只答是 / 否 */
 export const SENSITIVE_TOPIC = {
-  frontier_tech: '国产芯片、军工等高精尖技术研究',
-  public_safety: '恐怖主义、武器、暴力等危害社会安全的话题',
-  none: '都没有',
+  yes: '是',
+  no: '否',
   decline: '不便回答',
 } as const;
 export type SensitiveTopic = keyof typeof SENSITIVE_TOPIC;
+
+/** E10 上线时是多选（选具体话题 / 都没有 / 不便回答），后改成是 / 否：读早期问卷、旧页面的提交时换成新的，库里原样不改 */
+export function normalizeSensitiveTopic(v: unknown): unknown {
+  if (!Array.isArray(v)) return v;
+  if (v.includes('decline')) return 'decline';
+  if (v.includes('none')) return 'no';
+  return v.length ? 'yes' : v;
+}
 
 // ---------- 汇总 ----------
 
@@ -383,8 +390,8 @@ export interface SurveyAnswers {
   distill?: Distill;
   /** 第 2 版新增；第 1 版问卷可能没有 */
   sensitiveUse?: SensitiveUse[];
-  /** 第 3 版新增；第 1、2 版问卷可能没有 */
-  sensitiveTopic?: SensitiveTopic[];
+  /** 第 3 版新增；第 1、2 版问卷可能没有；早期是多选数组，读库时用 normalizeSensitiveTopic 换算 */
+  sensitiveTopic?: SensitiveTopic;
 
   // F 补充（选填）
   note?: string;
