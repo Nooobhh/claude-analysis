@@ -22,7 +22,8 @@
 - 开发 / 部署 / secret 配置细节在 `docs/development.md`（README 只做项目介绍，不放命令）
 - 结构：pnpm monorepo；检测站 `apps/detect`（Astro 7 静态页 + CF Worker），问卷站 `apps/data`（Astro 7 静态页 + CF Worker + D1）
 - 两站共用的类型与样式 token 在 `packages/shared`（样式 `styles/global.css`）；两站互不导入对方代码
-- 命令（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）、`pnpm dev:data`（问卷站 :4322，`/api` 代理到 :8788）、`pnpm dev:data-worker`（问卷站 Worker + 本地 D1 :8788）
+- 检测站开发（根目录）：`pnpm dev`（Astro :4321，`/api` 代理到 :8787）、`pnpm dev:worker`（构建后 wrangler dev :8787）
+- 问卷站开发（根目录）：`pnpm dev:data`（:4322，`/api` 代理到 :8788）、`pnpm dev:data-worker`（Worker + 本地 D1 :8788）
 - 命令（根目录）：`pnpm build`、`pnpm typecheck`（wrangler types + astro sync + 两套 tsc）、`pnpm run deploy` / `deploy:data`（构建 + 部署检测站 / 问卷站）
 - `pnpm deploy` 是 pnpm 内置命令，部署必须写 `pnpm run deploy`
 - 正常发布 = push main，由 `.github/workflows/deploy.yml` 先部署检测站、再部署问卷站；本地 `pnpm run deploy` 仅应急（页脚会标「含未提交改动」）
@@ -67,7 +68,7 @@
 - 浏览器直连：Anthropic 8 域名 trace、ipip.net / 又拍云（国内 IP）、Cloudflare / Google STUN、Fastly / Surfshark / ipleak（DNS）
 - Worker 访问：proxycheck.io + ipapi.is 并行（记 `flaggedBy` / `typeBy`，分歧前端并排显示），ipinfo.io 兜底；status.claude.com
 - 原生 IP：Worker 从 RIPE 的 RDAP 入口查（各 RIR 互相跳转）；落到 ARIN 时常 525，改走 whois.arin.net:43
-- Workers 出口 IP 多人共享，第三方匿名额度在线上基本不可用（2026-09-30 实测 proxycheck 403、ipinfo 429），一律配 key
+- Workers 出口 IP 多人共享，第三方匿名额度在线上不可用，一律配 key
 - 增删任何第三方必须同步检测站 `src/pages/privacy.astro` 的清单
 
 <!-- 本文件只记 agent 指令。进度 / 待办 / bug → ROADMAP.md；版本变更 → CHANGELOG.md -->
