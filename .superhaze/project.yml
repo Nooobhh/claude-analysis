@@ -1,0 +1,2 @@
+description: Claude 使用环境检测 + 封号数据统计：检测出口 IP 与环境指纹，开源、隐私优先
+# 不写 publish：合并进 main 后由 GitHub Actions（.github/workflows/deploy.yml）部署到 Cloudflare
